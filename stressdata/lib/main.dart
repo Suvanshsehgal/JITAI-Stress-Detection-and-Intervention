@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/splash.dart';
+import 'core/theme/colors.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 🔥 Enable edge-to-edge UI (IMPORTANT)
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
   runApp(const MyApp());
 }
 
@@ -13,13 +22,25 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Stress Data',
       debugShowCheckedModeBanner: false,
+
+      // 🎨 THEME (using your colors)
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4B3425)),
         useMaterial3: true,
+        scaffoldBackgroundColor: AppColors.background,
+
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.light,
+        ),
+
+        // AppBar theme (future use)
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
       ),
+
       home: const SplashScreen(),
     );
   }
 }
-
-
