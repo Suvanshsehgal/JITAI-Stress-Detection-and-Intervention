@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/colors.dart';
 import '../widget/custom_button.dart';
+import 'home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -207,7 +208,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               CustomButton(
                                 text: 'Login',
                                 onPressed: () {
-                                  // TODO: Handle login
+                                  // Navigate to Home Screen
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const HomeScreen(),
+                                    ),
+                                  );
                                 },
                                 isPrimary: true,
                               ),

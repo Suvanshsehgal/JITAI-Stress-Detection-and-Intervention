@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/colors.dart';
 import '../widget/custom_button.dart';
+import 'home.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -278,7 +279,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             CustomButton(
                               text: 'Create Account',
                               onPressed: () {
-                                // TODO: Handle registration
+                                // Navigate to Home Screen
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const HomeScreen(),
+                                  ),
+                                );
                               },
                               isPrimary: true,
                             ),
