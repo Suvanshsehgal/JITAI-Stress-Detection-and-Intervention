@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/colors.dart';
 import '../widget/custom_button.dart';
+import 'Login.dart';
+import 'Register.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -102,7 +104,14 @@ class OnboardingScreen extends StatelessWidget {
                     CustomButton(
                       text: 'Create an Account',
                       isPrimary: true,
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RegisterScreen(),
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 16),
@@ -111,7 +120,14 @@ class OnboardingScreen extends StatelessWidget {
                     CustomButton(
                       text: 'Login',
                       isPrimary: false,
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
