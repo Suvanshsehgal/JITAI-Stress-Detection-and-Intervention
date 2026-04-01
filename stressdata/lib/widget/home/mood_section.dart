@@ -18,7 +18,7 @@ class MoodSection extends StatelessWidget {
         Expanded(
           child: _MoodItem(
             icon: Icons.bedtime_outlined,
-            value: '${sleepHours.toStringAsFixed(1)} hrs',
+            value: sleepHours > 0 ? '${sleepHours.toStringAsFixed(1)} hrs' : '0 hrs',
             label: 'SLEEP',
           ),
         ),
@@ -34,7 +34,7 @@ class MoodSection extends StatelessWidget {
         Expanded(
           child: _MoodItem(
             icon: Icons.directions_walk_outlined,
-            value: '${steps.toStringAsFixed(1)}k',
+            value: steps > 0 ? '${steps.toStringAsFixed(1)}k' : '0k',
             label: 'STEPS',
           ),
         ),
@@ -76,8 +76,8 @@ class _MoodItem extends StatelessWidget {
       child: Column(
         children: [
           if (emoji != null)
-            Text(
-              emoji!,
+            const Text(
+              '😊',
               style: TextStyle(fontSize: 32),
             )
           else if (icon != null)

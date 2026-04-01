@@ -7,13 +7,13 @@ class WeeklyInsightsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final weekData = [
-      {'day': 'Mon', 'value': 0.6},
-      {'day': 'Tue', 'value': 0.8},
-      {'day': 'Wed', 'value': 0.5},
-      {'day': 'Thu', 'value': 0.9},
-      {'day': 'Fri', 'value': 0.7},
-      {'day': 'Sat', 'value': 0.4},
-      {'day': 'Sun', 'value': 0.6},
+      {'day': 'Mon', 'value': 0.0},
+      {'day': 'Tue', 'value': 0.0},
+      {'day': 'Wed', 'value': 0.9},
+      {'day': 'Thu', 'value': 0.0},
+      {'day': 'Fri', 'value': 0.0},
+      {'day': 'Sat', 'value': 0.0},
+      {'day': 'Sun', 'value': 0.0},
     ];
 
     return Container(
@@ -77,16 +77,19 @@ class _BarItem extends StatelessWidget {
       children: [
         Container(
           width: 28,
-          height: 100 * value,
+          height: value > 0 ? 100 * value : 4,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.primaryLight,
-                AppColors.primary,
-              ],
-            ),
+            gradient: value > 0
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.primaryLight,
+                      AppColors.primary,
+                    ],
+                  )
+                : null,
+            color: value == 0 ? AppColors.surface.withValues(alpha: 0.3) : null,
             borderRadius: BorderRadius.circular(8),
           ),
         ),
@@ -95,8 +98,10 @@ class _BarItem extends StatelessWidget {
           day,
           style: TextStyle(
             fontSize: 12,
-            color: AppColors.primary.withValues(alpha: 0.6),
-            fontWeight: FontWeight.w500,
+            color: value > 0
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: 0.4),
+            fontWeight: value > 0 ? FontWeight.bold : FontWeight.w500,
           ),
         ),
       ],

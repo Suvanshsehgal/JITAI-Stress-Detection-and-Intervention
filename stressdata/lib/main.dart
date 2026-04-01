@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/splash.dart';
+import 'screens/profile_screen.dart';
 import 'core/theme/colors.dart';
 
 void main() {
@@ -39,6 +40,11 @@ class MyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
+
+      // Routes
+      routes: {
+        '/profile': (context) => const ProfileScreen(),
+      },
 
       home: const SplashScreen(),
     );

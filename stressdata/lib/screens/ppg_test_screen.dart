@@ -8,14 +8,22 @@ import '../widget/ppg/progress_section.dart';
 import '../widget/custom_button.dart';
 import '../services/camera_service.dart';
 
-class PpgScreen extends StatefulWidget {
-  const PpgScreen({super.key});
+class PpgTestScreen extends StatefulWidget {
+  final bool isPre;
+  final Function(int bpm) onComplete;
+
+  const PpgTestScreen({
+    super.key,
+    required this.isPre,
+    required this.onComplete,
+  });
 
   @override
-  State<PpgScreen> createState() => _PpgScreenState();
+  State<PpgTestScreen> createState() => _PpgTestScreenState();
 }
 
-class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
+class _PpgTestScreenState extends State<PpgTestScreen>
+    with TickerProviderStateMixin {
   late AnimationController _heartBeatController;
   late AnimationController _rippleController;
   late AnimationController _waveController;
@@ -34,7 +42,6 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    // Heart beat animation (833ms per beat for 72 BPM)
     _heartBeatController = AnimationController(
       duration: const Duration(milliseconds: 833),
       vsync: this,
@@ -47,7 +54,6 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
       ),
     );
 
-    // Ripple animation
     _rippleController = AnimationController(
       duration: const Duration(milliseconds: 833),
       vsync: this,
@@ -67,19 +73,16 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
       ),
     );
 
-    // Wave animation (continuous scroll)
     _waveController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     );
 
-    // Progress animation (30 seconds)
     _progressController = AnimationController(
       duration: const Duration(seconds: 15),
       vsync: this,
     );
 
-    // Listen to progress completion
     _progressController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _onMeasurementComplete();
@@ -90,10 +93,9 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
   void _onMeasurementComplete() {
     setState(() {
       _measurementComplete = true;
-      _bpm = 88; // Set final BPM to 88
+      _bpm = 88;
     });
-    
-    // Stop all animations
+
     _heartBeatController.stop();
     _rippleController.stop();
     _waveController.stop();
@@ -106,7 +108,6 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
       _bpm = 88;
     });
 
-    // Initialize camera
     final success = await _cameraService.initialize();
     if (!success) {
       if (mounted) {
@@ -120,10 +121,8 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // Turn on flash
     await _cameraService.turnOnFlash();
 
-    // Start all animations
     _heartBeatController.repeat();
     _rippleController.repeat();
     _waveController.repeat();
@@ -131,6 +130,13 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
 
     setState(() {});
   }
+
+  void _handleContinue() {
+    widget.onComplete(_bpm);
+    Navigator.pop(context);
+  }
+
+  String get _buttonText => widget.isPre ? 'Continue' : 'Finish Test';
 
   @override
   void dispose() {
@@ -156,21 +162,20 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                // Top bar
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
                         Icon(
-                          Icons.hub_outlined,
-                          color: const Color(0xFF1A0A08),
+                          Icons.favorite,
+                          color: const Color(0xFF9B2B1A),
                           size: 28,
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          'Lorem Ipsum',
-                          style: TextStyle(
+                        Text(
+                          widget.isPre ? 'Pre-Test PPG' : 'Post-Test PPG',
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF1A0A08),
@@ -188,18 +193,13 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 32),
-
-                // Camera circle at top (only show when scanning)
                 if (_isScanning) ...[
                   CameraCircleWidget(
                     cameraController: _cameraService.controller,
                   ),
                   const SizedBox(height: 24),
                 ],
-
-                // Camera preview or BPM Circle
                 if (!_isScanning)
                   Column(
                     children: [
@@ -219,10 +219,7 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
                     rippleAnimation2: _rippleAnimation2,
                     isAnimating: !_measurementComplete,
                   ),
-
                 const SizedBox(height: 40),
-
-                // PPG Waveform (only show when scanning and not complete)
                 if (_isScanning && !_measurementComplete) ...[
                   PpgWaveform(waveAnimation: _waveController),
                   const Spacer(),
@@ -231,8 +228,8 @@ class _PpgScreenState extends State<PpgScreen> with TickerProviderStateMixin {
                 ] else if (_isScanning && _measurementComplete) ...[
                   const Spacer(),
                   CustomButton(
-                    text: 'Continue',
-                    onPressed: () => Navigator.pop(context),
+                    text: _buttonText,
+                    onPressed: _handleContinue,
                   ),
                   const SizedBox(height: 20),
                 ] else ...[

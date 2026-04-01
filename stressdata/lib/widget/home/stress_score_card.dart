@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
-import '../../screens/ppg.dart';
+import '../../screens/test_map_screen.dart';
 
 class StressScoreCard extends StatelessWidget {
   final int score;
@@ -16,8 +16,22 @@ class StressScoreCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight.withValues(alpha: 0.15),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF6B4A35), // Brown shade
+            Color(0xFF4B3425), // Darker brown
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4B3425).withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -34,8 +48,8 @@ class StressScoreCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: score / 100,
                     strokeWidth: 12,
-                    backgroundColor: AppColors.surface.withValues(alpha: 0.3),
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
                 Column(
@@ -43,10 +57,10 @@ class StressScoreCard extends StatelessWidget {
                   children: [
                     Text(
                       '$score',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                        color: Colors.white,
                       ),
                     ),
                     Text(
@@ -54,7 +68,7 @@ class StressScoreCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.primary.withValues(alpha: 0.7),
+                        color: Colors.white.withValues(alpha: 0.8),
                         letterSpacing: 1.2,
                       ),
                     ),
@@ -64,12 +78,12 @@ class StressScoreCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Text(
+          const Text(
             'Stress Score',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.primary,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 8),
@@ -77,7 +91,7 @@ class StressScoreCard extends StatelessWidget {
             'You are mentally healthy',
             style: TextStyle(
               fontSize: 14,
-              color: AppColors.primary.withValues(alpha: 0.6),
+              color: Colors.white.withValues(alpha: 0.8),
             ),
           ),
           const SizedBox(height: 24),
@@ -89,19 +103,19 @@ class StressScoreCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const PpgScreen(),
+                    builder: (context) => const TestMapScreen(),
                   ),
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF4B3425),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
                 elevation: 0,
               ),
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
@@ -111,7 +125,7 @@ class StressScoreCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Icon(Icons.arrow_forward, size: 20),
                 ],
               ),
