@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Stress Data',
+      title: 'Stride Probe',
       debugShowCheckedModeBanner: false,
 
       // 🎨 THEME (using your colors)
