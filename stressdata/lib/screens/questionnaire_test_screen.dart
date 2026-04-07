@@ -78,7 +78,7 @@ class _QuestionnaireTestScreenState extends State<QuestionnaireTestScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Question ${widget.startIndex + _currentQuestionIndex + 1}/${who5Questions.length}',
+                      'Question ${_currentQuestionIndex + 1}/${_questions.length}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
