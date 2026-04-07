@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../core/theme/colors.dart';
+import 'onboarding.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -137,18 +138,6 @@ class ProfileScreen extends StatelessWidget {
             patternPercent: 92,
           ),
 
-          const SizedBox(height: 20),
-
-          _buildTestResultCard(
-            date: 'Oct 22, 2023 • 09:15 AM',
-            score: 78,
-            status: 'GOOD',
-            statusColor: const Color(0xFFEA9B7E),
-            stroopPercent: 72,
-            speedPercent: 80,
-            patternPercent: 82,
-          ),
-
           const SizedBox(height: 40),
 
           _buildActionButton(
@@ -215,7 +204,14 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(context);
+                          Navigator.pop(context); // Close dialog
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const OnboardingScreen(),
+                            ),
+                            (route) => false, // Remove all previous routes
+                          );
                         },
                         child: const Text(
                           'Logout',

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../core/theme/colors.dart';
 import 'onboarding.dart';
+import 'data_consent_screen.dart';
 import '../widget/custom_button.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -40,7 +41,7 @@ class SplashScreen extends StatelessWidget {
 
               // Title
               Text(
-                'LOREM IPSUM',
+                'STRIDE PROBE',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -53,7 +54,7 @@ class SplashScreen extends StatelessWidget {
 
               // Subtitle
               Text(
-                'Lorem ipsum Lorem ipsum Lorem ipsum Lorem ipsum Lorem ipsum',
+                'The first step to a stress-free you ',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -67,12 +68,14 @@ class SplashScreen extends StatelessWidget {
               // Continue Button
               CustomButton(
                 text: 'Continue',
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
-                          const OnboardingScreen(),
+                          DataConsentScreen(
+                            onComplete: () {},
+                          ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
                         const begin = Offset(1.0, 0.0);
@@ -88,6 +91,15 @@ class SplashScreen extends StatelessWidget {
                       transitionDuration: const Duration(milliseconds: 400),
                     ),
                   );
+                  
+                  if (result == true && context.mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const OnboardingScreen(),
+                      ),
+                    );
+                  }
                 },
                 isPrimary: true,
               ),

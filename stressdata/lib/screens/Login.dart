@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(width: 16),
                         Text(
-                          'LOREM IPSUM',
+                          'STRIDE PROBE',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -75,7 +75,6 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: const BorderRadius.vertical(
@@ -89,166 +88,159 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                child: Column(
-                  children: [
-                    // Indicator at the top
-                    Container(
-                      width: 60,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Indicator at the top
+                      Container(
+                        width: 60,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                    // Centered content
-                    Expanded(
-                      child: Center(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // Title
-                              Text(
-                                'Welcome Back!',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
+                      // Title
+                      Text(
+                        'Welcome Back!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
 
-                              const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                              // Description
-                              Text(
-                                'Login to continue tracking your stress patterns and insights.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.primary.withValues(alpha: 0.6),
-                                  height: 1.6,
-                                ),
-                              ),
+                      // Description
+                      Text(
+                        'Login to continue tracking your stress patterns and insights.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.primary.withValues(alpha: 0.6),
+                          height: 1.6,
+                        ),
+                      ),
 
-                              const SizedBox(height: 30),
+                      const SizedBox(height: 30),
 
-                              // Username Field
-                              TextField(
-                                controller: _usernameController,
-                                decoration: InputDecoration(
-                                  hintText: 'Username',
-                                  hintStyle: TextStyle(
-                                    color: AppColors.primary.withValues(alpha: 0.4),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.transparent,
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: AppColors.primary.withValues(alpha: 0.3),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 18,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 20),
-
-                              // Password Field
-                              TextField(
-                                controller: _passwordController,
-                                obscureText: true,
-                                decoration: InputDecoration(
-                                  hintText: 'Password',
-                                  hintStyle: TextStyle(
-                                    color: AppColors.primary.withValues(alpha: 0.4),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.transparent,
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: AppColors.primary.withValues(alpha: 0.3),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 18,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 30),
-
-                              // Login Button
-                              CustomButton(
-                                text: 'Login',
-                                onPressed: () {
-                                  // Navigate to Home Screen
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const HomeScreen(),
-                                    ),
-                                  );
-                                },
-                                isPrimary: true,
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Or continue with
-                              Text(
-                                'or continue with',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.primary.withValues(alpha: 0.5),
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Social Login Buttons
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _socialButton(Icons.g_mobiledata),
-                                  const SizedBox(width: 20),
-                                  _socialButton(Icons.apple),
-                                  const SizedBox(width: 20),
-                                  _socialButton(Icons.facebook),
-                                ],
-                              ),
-                            ],
+                      // Username Field
+                      TextField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: 'Username',
+                          hintStyle: TextStyle(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                          ),
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 20),
+
+                      // Password Field
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          hintText: 'Password',
+                          hintStyle: TextStyle(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                          ),
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      // Login Button
+                      CustomButton(
+                        text: 'Login',
+                        onPressed: () {
+                          // Navigate to Home Screen
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HomeScreen(),
+                            ),
+                          );
+                        },
+                        isPrimary: true,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Or continue with
+                      Text(
+                        'or continue with',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Social Login Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _socialButton(Icons.g_mobiledata),
+                          const SizedBox(width: 20),
+                          _socialButton(Icons.apple),
+                          const SizedBox(width: 20),
+                          _socialButton(Icons.facebook),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
             ),
