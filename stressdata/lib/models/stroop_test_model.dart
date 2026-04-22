@@ -137,4 +137,74 @@ List<StroopQuestion> stroopQuestions = [
     correctAnswer: "Green",
     options: ["Red", "Blue", "Green", "Yellow"],
   ),
+  StroopQuestion(
+    id: 16,
+    word: "BLUE",
+    wordColor: const Color(0xFFFFEB3B), // Yellow
+    correctAnswer: "Yellow",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 17,
+    word: "RED",
+    wordColor: const Color(0xFFF44336), // Red (congruent)
+    correctAnswer: "Red",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 18,
+    word: "GREEN",
+    wordColor: const Color(0xFF4CAF50), // Green (congruent)
+    correctAnswer: "Green",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 19,
+    word: "YELLOW",
+    wordColor: const Color(0xFFFFEB3B), // Yellow (congruent)
+    correctAnswer: "Yellow",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 20,
+    word: "BLUE",
+    wordColor: const Color(0xFF2196F3), // Blue (congruent)
+    correctAnswer: "Blue",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 21,
+    word: "RED",
+    wordColor: const Color(0xFF4CAF50), // Green
+    correctAnswer: "Green",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 22,
+    word: "GREEN",
+    wordColor: const Color(0xFFFFEB3B), // Yellow
+    correctAnswer: "Yellow",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 23,
+    word: "YELLOW",
+    wordColor: const Color(0xFF2196F3), // Blue
+    correctAnswer: "Blue",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 24,
+    word: "BLUE",
+    wordColor: const Color(0xFFF44336), // Red
+    correctAnswer: "Red",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
+  StroopQuestion(
+    id: 25,
+    word: "RED",
+    wordColor: const Color(0xFFFFEB3B), // Yellow
+    correctAnswer: "Yellow",
+    options: ["Red", "Blue", "Green", "Yellow"],
+  ),
 ];
