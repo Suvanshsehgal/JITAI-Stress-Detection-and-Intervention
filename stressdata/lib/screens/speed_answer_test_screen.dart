@@ -19,7 +19,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
     with TickerProviderStateMixin {
   int _currentQuestionIndex = 0;
   final List<SpeedAnswer> _answers = [];
-  int _timeLeft = 5;
+  int _timeLeft = 3;
   Timer? _timer;
   DateTime? _questionStartTime;
   bool _showInstructions = true;
@@ -44,7 +44,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
     )..repeat(reverse: true);
 
     _progressController = AnimationController(
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 3),
       vsync: this,
     );
 
@@ -67,7 +67,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
 
   void _startQuestion() {
     setState(() {
-      _timeLeft = 5;
+      _timeLeft = 3;
       _answered = false;
       _questionStartTime = DateTime.now();
     });
@@ -81,7 +81,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
         setState(() {
           _timeLeft--;
         });
-        if (_timeLeft == 2) {
+        if (_timeLeft == 1) {
           _shakeController.forward(from: 0);
         }
       } else {
@@ -356,7 +356,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
                           const SizedBox(height: 16),
                           _buildInstructionCard(
                             '2',
-                            '5 Seconds Each',
+                            '3 Seconds Each',
                             'Think fast, answer faster!',
                             Icons.timer,
                           ),
@@ -607,7 +607,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
                     strokeWidth: 8,
                     backgroundColor: const Color(0xFFE5D5CC),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _timeLeft <= 2 ? Colors.red : const Color(0xFF2196F3),
+                      _timeLeft <= 1 ? Colors.red : const Color(0xFF2196F3),
                     ),
                   ),
                 ),
@@ -617,7 +617,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color:
-                        _timeLeft <= 2 ? Colors.red : const Color(0xFF1A0A08),
+                        _timeLeft <= 1 ? Colors.red : const Color(0xFF1A0A08),
                   ),
                 ),
               ],

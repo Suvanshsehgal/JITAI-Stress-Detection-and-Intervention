@@ -19,7 +19,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
     with TickerProviderStateMixin {
   int _currentQuestionIndex = 0;
   final List<StroopAnswer> _answers = [];
-  int _timeLeft = 5;
+  int _timeLeft = 3;
   Timer? _timer;
   DateTime? _questionStartTime;
   bool _showInstructions = true;
@@ -42,7 +42,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
     )..repeat(reverse: true);
 
     _progressController = AnimationController(
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 3),
       vsync: this,
     );
   }
@@ -56,7 +56,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
 
   void _startQuestion() {
     setState(() {
-      _timeLeft = 5;
+      _timeLeft = 3;
       _answered = false;
       _questionStartTime = DateTime.now();
     });
@@ -330,7 +330,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                           _buildInstructionCard(
                             '2',
                             'Answer Quickly',
-                            'You have 5 seconds per question',
+                            'You have 3 seconds per question',
                             Icons.timer,
                           ),
                           const SizedBox(height: 16),
@@ -581,7 +581,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                     strokeWidth: 8,
                     backgroundColor: const Color(0xFFE5D5CC),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _timeLeft <= 2 ? Colors.red : const Color(0xFF9B2B1A),
+                      _timeLeft <= 1 ? Colors.red : const Color(0xFF9B2B1A),
                     ),
                   ),
                 ),
@@ -590,7 +590,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: _timeLeft <= 2 ? Colors.red : const Color(0xFF1A0A08),
+                    color: _timeLeft <= 1 ? Colors.red : const Color(0xFF1A0A08),
                   ),
                 ),
               ],
