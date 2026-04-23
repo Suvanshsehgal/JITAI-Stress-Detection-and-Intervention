@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../models/speed_answer_model.dart';
+import '../services/session_manager.dart';
+import '../services/database_service.dart';
 
 class SpeedAnswerTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
@@ -25,7 +27,10 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
   bool _showInstructions = true;
   int _score = 0;
   int _streak = 0;
+  int _maxStreak = 0;
   bool _answered = false;
+  final SessionManager _sessionManager = SessionManager();
+  final DatabaseService _dbService = DatabaseService();
   late AnimationController _pulseController;
   late AnimationController _progressController;
   late AnimationController _shakeController;
@@ -131,6 +136,9 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
 
     if (isCorrect) {
       _streak++;
+      if (_streak > _maxStreak) {
+        _maxStreak = _streak;
+      }
       final timeBonus = (_timeLeft * 3);
       final streakBonus = (_streak > 1) ? (_streak * 5) : 0;
       final speedBonus = responseTime < 2000 ? 10 : 0;
@@ -217,9 +225,55 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
     });
   }
 
-  void _completeTest() {
+  Future<void> _completeTest() async {
+    // Save to database
+    await _saveToDatabase();
+    
     widget.onComplete(_score);
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _saveToDatabase() async {
+    try {
+      final sessionId = _sessionManager.sessionId;
+      final userId = _sessionManager.userId;
+
+      if (sessionId == null || userId == null) {
+        throw Exception('No active session or user');
+      }
+
+      // Calculate metrics
+      final correctAnswers = _answers.where((a) => a.isCorrect).length;
+      final totalQuestions = _answers.length;
+      final totalResponseTime = _answers.fold<int>(
+        0,
+        (sum, answer) => sum + answer.responseTime,
+      );
+      final averageResponseTime = totalResponseTime / totalQuestions;
+
+      await _dbService.insertSpeedAnswerResults(
+        sessionId: sessionId,
+        userId: userId,
+        score: _score,
+        correctAnswers: correctAnswers,
+        totalQuestions: totalQuestions,
+        averageResponseTime: averageResponseTime,
+      );
+
+      debugPrint('✅ Speed Answer data saved successfully');
+    } catch (e) {
+      debugPrint('❌ Failed to save Speed Answer data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save test results: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override

@@ -45,11 +45,11 @@ class DatabaseService {
       'q4': q4,
       'q5': q5,
       'total_score': total,
-      'normalized_score': (total / 25.0) * 100,
+      'normalized_score': total / 25.0, // 0-1 range as per your schema
     });
   }
 
-  // Insert Speed Answer Test results
+  // Insert Speed Answer Test results into cognitive_metrics
   Future<void> insertSpeedAnswerResults({
     required String sessionId,
     required String userId,
@@ -58,17 +58,33 @@ class DatabaseService {
     required int totalQuestions,
     required double averageResponseTime,
   }) async {
-    await supabase.from('speed_answer_results').insert({
-      'session_id': sessionId,
-      'user_id': userId,
-      'score': score,
-      'correct_answers': correctAnswers,
-      'total_questions': totalQuestions,
-      'average_response_time': averageResponseTime,
-    });
+    final accuracy = correctAnswers / totalQuestions;
+
+    // Check if cognitive_metrics row exists for this session
+    final existing = await supabase
+        .from('cognitive_metrics')
+        .select()
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+    if (existing == null) {
+      // Insert new row
+      await supabase.from('cognitive_metrics').insert({
+        'session_id': sessionId,
+        'user_id': userId,
+        'speed_accuracy': accuracy,
+        'avg_response_time': averageResponseTime,
+      });
+    } else {
+      // Update existing row
+      await supabase.from('cognitive_metrics').update({
+        'speed_accuracy': accuracy,
+        'avg_response_time': averageResponseTime,
+      }).eq('session_id', sessionId);
+    }
   }
 
-  // Insert Stroop Test results
+  // Insert Stroop Test results into cognitive_metrics
   Future<void> insertStroopResults({
     required String sessionId,
     required String userId,
@@ -77,17 +93,33 @@ class DatabaseService {
     required int totalQuestions,
     required double averageResponseTime,
   }) async {
-    await supabase.from('stroop_results').insert({
-      'session_id': sessionId,
-      'user_id': userId,
-      'score': score,
-      'correct_answers': correctAnswers,
-      'total_questions': totalQuestions,
-      'average_response_time': averageResponseTime,
-    });
+    final accuracy = correctAnswers / totalQuestions;
+
+    // Check if cognitive_metrics row exists for this session
+    final existing = await supabase
+        .from('cognitive_metrics')
+        .select()
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+    if (existing == null) {
+      // Insert new row
+      await supabase.from('cognitive_metrics').insert({
+        'session_id': sessionId,
+        'user_id': userId,
+        'stroop_accuracy': accuracy,
+        'stroop_avg_response_time': averageResponseTime,
+      });
+    } else {
+      // Update existing row
+      await supabase.from('cognitive_metrics').update({
+        'stroop_accuracy': accuracy,
+        'stroop_avg_response_time': averageResponseTime,
+      }).eq('session_id', sessionId);
+    }
   }
 
-  // Insert Pattern Memory Test results
+  // Insert Pattern Memory Test results into cognitive_metrics
   Future<void> insertPatternMemoryResults({
     required String sessionId,
     required String userId,
@@ -96,17 +128,33 @@ class DatabaseService {
     required int totalQuestions,
     required double averageResponseTime,
   }) async {
-    await supabase.from('pattern_memory_results').insert({
-      'session_id': sessionId,
-      'user_id': userId,
-      'score': score,
-      'correct_answers': correctAnswers,
-      'total_questions': totalQuestions,
-      'average_response_time': averageResponseTime,
-    });
+    final accuracy = correctAnswers / totalQuestions;
+
+    // Check if cognitive_metrics row exists for this session
+    final existing = await supabase
+        .from('cognitive_metrics')
+        .select()
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+    if (existing == null) {
+      // Insert new row
+      await supabase.from('cognitive_metrics').insert({
+        'session_id': sessionId,
+        'user_id': userId,
+        'memory_accuracy': accuracy,
+        'memory_max_level': totalQuestions,
+      });
+    } else {
+      // Update existing row
+      await supabase.from('cognitive_metrics').update({
+        'memory_accuracy': accuracy,
+        'memory_max_level': totalQuestions,
+      }).eq('session_id', sessionId);
+    }
   }
 
-  // Insert PPG Test results
+  // Insert PPG Test results into physiological_metrics
   Future<void> insertPPGResults({
     required String sessionId,
     required String userId,
@@ -114,13 +162,28 @@ class DatabaseService {
     required double hrv,
     required double stressIndex,
   }) async {
-    await supabase.from('ppg_results').insert({
-      'session_id': sessionId,
-      'user_id': userId,
-      'heart_rate': heartRate,
-      'hrv': hrv,
-      'stress_index': stressIndex,
-    });
+    // Check if physiological_metrics row exists for this session
+    final existing = await supabase
+        .from('physiological_metrics')
+        .select()
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+    if (existing == null) {
+      // Insert new row
+      await supabase.from('physiological_metrics').insert({
+        'session_id': sessionId,
+        'user_id': userId,
+        'heart_rate_avg': heartRate,
+        'rmssd': hrv,
+      });
+    } else {
+      // Update existing row (for post-test PPG)
+      await supabase.from('physiological_metrics').update({
+        'heart_rate_avg': heartRate,
+        'rmssd': hrv,
+      }).eq('session_id', sessionId);
+    }
   }
 
   // Get user's test history

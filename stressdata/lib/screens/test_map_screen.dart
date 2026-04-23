@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/test_stage.dart';
 import '../widget/custom_button.dart';
+import '../services/session_manager.dart';
+import '../services/database_service.dart';
 import 'ppg_test_screen.dart';
 import 'questionnaire_test_screen.dart';
 import 'stroop_test_screen.dart';
@@ -17,6 +19,8 @@ class TestMapScreen extends StatefulWidget {
 
 class _TestMapScreenState extends State<TestMapScreen> {
   TestProgress _progress = TestProgress.initial();
+  final SessionManager _sessionManager = SessionManager();
+  bool _isInitializing = false;
 
   final List<Map<String, dynamic>> _testStages = [
     {
@@ -63,7 +67,49 @@ class _TestMapScreenState extends State<TestMapScreen> {
     },
   ];
 
-  void _startTest() {
+  Future<void> _startTest() async {
+    // Debug: Check auth state
+    debugPrint('🔍 Starting test - checking auth state...');
+    debugPrint('🔍 User ID: ${_sessionManager.userId}');
+    debugPrint('🔍 Has active session: ${_sessionManager.hasActiveSession}');
+    
+    // Start session if not already started
+    if (!_sessionManager.hasActiveSession) {
+      setState(() => _isInitializing = true);
+      
+      final success = await _sessionManager.startSession();
+      
+      setState(() => _isInitializing = false);
+      
+      if (!success) {
+        if (mounted) {
+          // Check if user is logged in
+          final userId = _sessionManager.userId;
+          final errorMessage = userId == null
+              ? 'Please log in to start the test.'
+              : 'Failed to start test session. Please check your internet connection and try again.';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+              action: userId == null
+                  ? SnackBarAction(
+                      label: 'Login',
+                      textColor: Colors.white,
+                      onPressed: () {
+                        Navigator.of(context).pop(); // Go back to home
+                      },
+                    )
+                  : null,
+            ),
+          );
+        }
+        return;
+      }
+    }
+    
     _navigateToStage(_progress.currentStage);
   }
 
@@ -147,7 +193,12 @@ class _TestMapScreenState extends State<TestMapScreen> {
     }
   }
 
-  void _showCompletionDialog() {
+  Future<void> _showCompletionDialog() async {
+    // End session
+    await _sessionManager.endSession();
+    
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -386,14 +437,16 @@ class _TestMapScreenState extends State<TestMapScreen> {
                 const SizedBox(height: 20),
 
                 // Start/Continue button
-                CustomButton(
-                  text: _progress.completedStages.isEmpty
-                      ? 'Start Test'
-                      : _progress.currentStage == TestStage.completed
-                          ? 'View Results'
-                          : 'Continue Test',
-                  onPressed: _startTest,
-                ),
+                _isInitializing
+                    ? const Center(child: CircularProgressIndicator())
+                    : CustomButton(
+                        text: _progress.completedStages.isEmpty
+                            ? 'Start Test'
+                            : _progress.currentStage == TestStage.completed
+                                ? 'View Results'
+                                : 'Continue Test',
+                        onPressed: _startTest,
+                      ),
               ],
             ),
           ),

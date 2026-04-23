@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../services/ppg_service.dart';
+import '../services/session_manager.dart';
+import '../services/database_service.dart';
 import '../models/ppg_data.dart';
 import '../widget/custom_button.dart';
 import '../widget/ppg/ppg_waveform_painter.dart';
@@ -24,6 +26,8 @@ class PpgTestScreen extends StatefulWidget {
 class _PpgTestScreenState extends State<PpgTestScreen>
     with TickerProviderStateMixin {
   final PPGService _ppgService = PPGService();
+  final SessionManager _sessionManager = SessionManager();
+  final DatabaseService _dbService = DatabaseService();
   
   // State
   PPGState _currentState = PPGState.initializing;
@@ -187,14 +191,19 @@ class _PpgTestScreenState extends State<PpgTestScreen>
   void _completeMeasurement() {
     _measurementTimer?.cancel();
     
-    final result = _ppgService.getResult();
+    // Check if we have a valid BPM reading
+    final hasValidReading = _currentBPM > 0 && _currentBPM >= 40 && _currentBPM <= 200;
     
-    if (result != null && result.isReliable) {
+    if (hasValidReading) {
+      // Valid reading - show complete state
       setState(() {
         _currentState = PPGState.complete;
         _updateStatusMessage();
       });
+      debugPrint('✅ PPG: Measurement complete with BPM: $_currentBPM');
     } else {
+      // No valid reading - show retry dialog
+      debugPrint('⚠️ PPG: No valid reading after 30s. BPM: $_currentBPM');
       _showRetryDialog();
     }
   }
@@ -305,14 +314,69 @@ class _PpgTestScreenState extends State<PpgTestScreen>
     });
   }
 
-  void _handleComplete() {
+  Future<void> _handleComplete() async {
     final result = _ppgService.getResult();
+    int bpm = 72; // default
+    
     if (result != null) {
-      widget.onComplete(result.bpm);
-    } else {
-      widget.onComplete(_currentBPM > 0 ? _currentBPM : 72);
+      bpm = result.bpm;
+    } else if (_currentBPM > 0) {
+      bpm = _currentBPM;
     }
-    Navigator.pop(context);
+    
+    // Save to database
+    await _saveToDatabase(bpm);
+    
+    widget.onComplete(bpm);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _saveToDatabase(int bpm) async {
+    try {
+      final sessionId = _sessionManager.sessionId;
+      final userId = _sessionManager.userId;
+
+      if (sessionId == null || userId == null) {
+        throw Exception('No active session or user');
+      }
+
+      // For now, we'll use simplified metrics
+      // In production, you'd calculate actual HRV from the PPG signal
+      final heartRate = bpm.toDouble();
+      final hrv = 50.0; // Placeholder - calculate from signal in production
+      final stressIndex = _calculateStressIndex(bpm);
+
+      await _dbService.insertPPGResults(
+        sessionId: sessionId,
+        userId: userId,
+        heartRate: heartRate,
+        hrv: hrv,
+        stressIndex: stressIndex,
+      );
+
+      debugPrint('✅ PPG data saved successfully (isPre: ${widget.isPre})');
+    } catch (e) {
+      debugPrint('❌ Failed to save PPG data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save heart rate data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  double _calculateStressIndex(int bpm) {
+    // Simple stress index based on heart rate
+    // Normal resting: 60-100 bpm
+    if (bpm < 60) return 0.3; // Low
+    if (bpm <= 80) return 0.5; // Normal
+    if (bpm <= 100) return 0.7; // Slightly elevated
+    return 0.9; // High
   }
 
   @override
