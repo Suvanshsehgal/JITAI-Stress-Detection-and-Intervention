@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/colors.dart';
 import '../widget/custom_button.dart';
+import '../services/auth_service.dart';
 import 'home.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -12,18 +13,84 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authService = AuthService();
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      _showError('Please fill all fields');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      _showError('Password must be at least 6 characters');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _authService.signUp(email, password);
+      
+      if (response.user != null) {
+        if (mounted) {
+          _showSuccess('Account created successfully! Please check your email to verify.');
+          // Navigate to login or home after a delay
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   @override
@@ -135,43 +202,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Username Field
-                      TextField(
-                        controller: _usernameController,
-                        decoration: InputDecoration(
-                          hintText: 'Username',
-                          hintStyle: TextStyle(
-                            color: AppColors.primary.withValues(alpha: 0.4),
-                          ),
-                          filled: true,
-                          fillColor: Colors.transparent,
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.3),
-                              width: 2,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.primary,
-                              width: 2,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 18,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
                       // Email Field
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
+                        enabled: !_isLoading,
                         decoration: InputDecoration(
                           hintText: 'Email',
                           hintStyle: TextStyle(
@@ -206,6 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
+                        enabled: !_isLoading,
                         decoration: InputDecoration(
                           hintText: 'Password',
                           hintStyle: TextStyle(
@@ -240,6 +276,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       TextField(
                         controller: _confirmPasswordController,
                         obscureText: true,
+                        enabled: !_isLoading,
                         decoration: InputDecoration(
                           hintText: 'Confirm Password',
                           hintStyle: TextStyle(
@@ -271,19 +308,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 20),
 
                       // Register Button
-                      CustomButton(
-                        text: 'Create Account',
-                        onPressed: () {
-                          // Navigate to Home Screen
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const HomeScreen(),
+                      _isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(),
+                            )
+                          : CustomButton(
+                              text: 'Create Account',
+                              onPressed: _handleRegister,
+                              isPrimary: true,
                             ),
-                          );
-                        },
-                        isPrimary: true,
-                      ),
 
                       const SizedBox(height: 12),
 

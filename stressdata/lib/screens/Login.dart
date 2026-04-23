@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/colors.dart';
 import '../widget/custom_button.dart';
+import '../services/auth_service.dart';
 import 'home.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -12,14 +13,56 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter email and password');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _authService.signIn(email, password);
+      
+      if (response.user != null) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -131,11 +174,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 30),
 
-                      // Username Field
+                      // Email Field
                       TextField(
-                        controller: _usernameController,
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        enabled: !_isLoading,
                         decoration: InputDecoration(
-                          hintText: 'Username',
+                          hintText: 'Email',
                           hintStyle: TextStyle(
                             color: AppColors.primary.withValues(alpha: 0.4),
                           ),
@@ -168,6 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
+                        enabled: !_isLoading,
                         decoration: InputDecoration(
                           hintText: 'Password',
                           hintStyle: TextStyle(
@@ -199,19 +245,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 30),
 
                       // Login Button
-                      CustomButton(
-                        text: 'Login',
-                        onPressed: () {
-                          // Navigate to Home Screen
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const HomeScreen(),
+                      _isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(),
+                            )
+                          : CustomButton(
+                              text: 'Login',
+                              onPressed: _handleLogin,
+                              isPrimary: true,
                             ),
-                          );
-                        },
-                        isPrimary: true,
-                      ),
 
                       const SizedBox(height: 16),
 
