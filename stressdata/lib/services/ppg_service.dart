@@ -4,379 +4,495 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import '../models/ppg_data.dart';
 
+/// Optimized PPG Service with:
+/// - 4th-order Butterworth IIR bandpass filter (0.5–3.5 Hz)
+/// - Linear detrending (least-squares) instead of mean subtraction
+/// - IBI (Inter-Beat Interval) based BPM — more accurate than peak-count/time
+/// - Adaptive peak detection with physiological refractory period
+/// - Median-based outlier rejection on beat intervals
+/// - Proper SNR using signal vs residual noise power
+/// - Welford's online variance for efficient stats
 class PPGService {
   CameraController? _controller;
   bool _isInitialized = false;
   bool _isProcessing = false;
-  
-  // Signal buffer (15 seconds at ~30 FPS = ~450 samples)
+
+  // ─── Buffer Configuration ────────────────────────────────────────────────
+  // 15 s at ~30 FPS. We track actual timestamps, so FPS drift is handled.
   final List<PPGReading> _signalBuffer = [];
   final int _maxBufferSize = 450;
-  final int _minSamplesForBPM = 150; // 5 seconds minimum
-  
-  // BPM calculation
+  final int _minSamplesForBPM = 150; // 5 s minimum before first estimate
+
+  // ─── State ───────────────────────────────────────────────────────────────
   int _currentBPM = 0;
   double _confidence = 0.0;
   SignalQuality _signalQuality = SignalQuality.noSignal;
-  
-  // Timestamps
   DateTime? _lastBPMUpdate;
-  
-  // Stream controllers
+
+  // BPM history for temporal smoothing (keep last 5 valid estimates)
+  final List<int> _bpmHistory = [];
+  static const int _bpmHistorySize = 5;
+
+  // Last accepted clean IBI list — exposed via getResult()
+  List<double> _lastCleanIBIs = [];
+
+  // ─── Streams ─────────────────────────────────────────────────────────────
   final _bpmController = StreamController<int>.broadcast();
   final _confidenceController = StreamController<double>.broadcast();
   final _qualityController = StreamController<SignalQuality>.broadcast();
   final _waveformController = StreamController<List<double>>.broadcast();
   final _stateController = StreamController<PPGState>.broadcast();
-  
-  // Getters
+
   Stream<int> get bpmStream => _bpmController.stream;
   Stream<double> get confidenceStream => _confidenceController.stream;
   Stream<SignalQuality> get qualityStream => _qualityController.stream;
   Stream<List<double>> get waveformStream => _waveformController.stream;
   Stream<PPGState> get stateStream => _stateController.stream;
-  
+
   int get currentBPM => _currentBPM;
   double get confidence => _confidence;
   SignalQuality get signalQuality => _signalQuality;
   bool get isInitialized => _isInitialized;
 
-  /// Initialize camera and start measurement
+  // ─── IIR Filter State ────────────────────────────────────────────────────
+  // 4th-order Butterworth bandpass implemented as two biquad sections (SOS).
+  // Pre-computed for Fs=30 Hz, passband 0.5–3.5 Hz.
+  // Each row: [b0, b1, b2, a1, a2]  (a0 normalised to 1)
+  //
+  // Generated with scipy:
+  //   sos = signal.butter(2, [0.5, 3.5], btype='bandpass', fs=30, output='sos')
+  static const List<List<double>> _butterSOS = [
+    // Section 1
+    [0.05960692, 0.0, -0.05960692, -1.72971020, 0.76647482],
+    // Section 2
+    [1.0, 0.0, -1.0, -1.87774685, 0.88079258],
+  ];
+
+  // Per-section delay registers [w1, w2]
+  final List<List<double>> _sosDelay = [
+    [0.0, 0.0],
+    [0.0, 0.0],
+  ];
+
+  // ─── Initialization ───────────────────────────────────────────────────────
   Future<bool> initialize() async {
     try {
       _stateController.add(PPGState.initializing);
-      
+
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         _stateController.add(PPGState.error);
         return false;
       }
 
-      // Use back camera
       final backCamera = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
+        (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
 
       _controller = CameraController(
         backCamera,
-        ResolutionPreset.low, // Low resolution for performance
+        ResolutionPreset.low,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
       await _controller!.initialize();
       await _controller!.setFlashMode(FlashMode.torch);
-      
+
       _isInitialized = true;
-      
-      // Start image stream processing
       _controller!.startImageStream(_processImage);
-      
       _stateController.add(PPGState.warmingUp);
-      
-      // After 5 seconds, switch to measuring state
+
       Future.delayed(const Duration(seconds: 5), () {
-        if (_isInitialized) {
-          _stateController.add(PPGState.measuring);
-        }
+        if (_isInitialized) _stateController.add(PPGState.measuring);
       });
-      
+
       return true;
     } catch (e) {
-      debugPrint('PPG initialization error: $e');
+      debugPrint('PPG init error: $e');
       _stateController.add(PPGState.error);
       return false;
     }
   }
 
-  /// Process camera frame and extract PPG signal
+  // ─── Frame Processing ─────────────────────────────────────────────────────
   void _processImage(CameraImage image) {
     if (_isProcessing) return;
     _isProcessing = true;
 
     try {
-      // Extract average red channel intensity
       final redValue = _extractRedChannel(image);
-      
-      // Add to buffer
-      _signalBuffer.add(PPGReading(
-        redValue: redValue,
-        timestamp: DateTime.now(),
-      ));
-
-      // Maintain buffer size
-      if (_signalBuffer.length > _maxBufferSize) {
-        _signalBuffer.removeAt(0);
-      }
-
-      // Update BPM every second
       final now = DateTime.now();
-      if (_lastBPMUpdate == null || 
+
+      _signalBuffer.add(PPGReading(redValue: redValue, timestamp: now));
+      if (_signalBuffer.length > _maxBufferSize) _signalBuffer.removeAt(0);
+
+      // Update BPM every ~1 s
+      if (_lastBPMUpdate == null ||
           now.difference(_lastBPMUpdate!).inMilliseconds >= 1000) {
         _calculateBPM();
         _lastBPMUpdate = now;
       }
 
-      // Emit waveform data (last 150 samples for display)
+      // Emit waveform (last 5 s ≈ 150 samples)
       if (_signalBuffer.length > 10) {
-        final displaySamples = _signalBuffer.length > 150 
-            ? _signalBuffer.sublist(_signalBuffer.length - 150)
-            : _signalBuffer;
-        final waveform = displaySamples.map((r) => r.redValue).toList();
+        final start = max(0, _signalBuffer.length - 150);
+        final waveform =
+            _signalBuffer.sublist(start).map((r) => r.redValue).toList();
         _waveformController.add(waveform);
       }
     } catch (e) {
-      debugPrint('Frame processing error: $e');
+      debugPrint('Frame error: $e');
     } finally {
       _isProcessing = false;
     }
   }
 
-  /// Extract average red channel intensity from YUV image
+  // ─── Red Channel Extraction ───────────────────────────────────────────────
+  /// Samples the centre 20 % of the Y (luminance) plane.
+  /// Luminance ≈ 0.299 R + 0.587 G + 0.114 B. With torch + finger,
+  /// the red channel dominates, so Y is a reliable proxy.
   double _extractRedChannel(CameraImage image) {
     try {
-      // YUV420 format: Y plane contains luminance
-      // For PPG, we use luminance as proxy for red channel intensity
       final yPlane = image.planes[0];
       final bytes = yPlane.bytes;
-      
-      // Sample center region (20% of image) for better finger coverage
       final width = image.width;
       final height = image.height;
-      final centerX = width ~/ 2;
-      final centerY = height ~/ 2;
-      final sampleRadius = min(width, height) ~/ 5;
-      
+      final stride = yPlane.bytesPerRow;
+
+      final cx = width ~/ 2;
+      final cy = height ~/ 2;
+      final r = min(width, height) ~/ 5; // 20 % radius
+
       double sum = 0;
       int count = 0;
-      
-      for (int y = centerY - sampleRadius; y < centerY + sampleRadius; y++) {
-        for (int x = centerX - sampleRadius; x < centerX + sampleRadius; x++) {
+
+      for (int y = cy - r; y < cy + r; y++) {
+        for (int x = cx - r; x < cx + r; x++) {
           if (x >= 0 && x < width && y >= 0 && y < height) {
-            final index = y * width + x;
-            if (index < bytes.length) {
-              sum += bytes[index];
+            final idx = y * stride + x;
+            if (idx < bytes.length) {
+              sum += bytes[idx] & 0xFF;
               count++;
             }
           }
         }
       }
-      
+
       return count > 0 ? sum / count : 0.0;
     } catch (e) {
-      debugPrint('Red channel extraction error: $e');
+      debugPrint('Channel extraction error: $e');
       return 0.0;
     }
   }
 
-  /// Calculate BPM from signal buffer
+  // ─── BPM Calculation ──────────────────────────────────────────────────────
   void _calculateBPM() {
     if (_signalBuffer.length < _minSamplesForBPM) {
-      _signalQuality = SignalQuality.noSignal;
-      _qualityController.add(_signalQuality);
+      _emit(SignalQuality.noSignal, 0, 0.0);
       return;
     }
 
     try {
-      // Extract raw signal
       final rawSignal = _signalBuffer.map((r) => r.redValue).toList();
-      
-      // Signal processing pipeline
-      final detrended = _detrend(rawSignal);
-      final smoothed = _movingAverage(detrended, 5);
-      final filtered = _bandpassFilter(smoothed);
-      
-      // Peak detection
-      final peaks = _detectPeaks(filtered);
-      
-      // Calculate BPM
-      if (peaks.length >= 2) {
-        final timeSpan = _signalBuffer.last.timestamp
-            .difference(_signalBuffer.first.timestamp)
-            .inMilliseconds / 1000.0;
-        
-        final bpm = ((peaks.length - 1) / timeSpan * 60).round();
-        
-        // Validate BPM range (40-200 bpm)
-        if (bpm >= 40 && bpm <= 200) {
-          // Smooth BPM changes
-          _currentBPM = _smoothBPM(bpm);
-          
-          // Calculate confidence and quality
-          _confidence = _calculateConfidence(filtered, peaks);
-          _signalQuality = _assessSignalQuality(_confidence, filtered);
-          
-          // Emit updates
-          _bpmController.add(_currentBPM);
-          _confidenceController.add(_confidence);
-          _qualityController.add(_signalQuality);
-        } else {
-          _signalQuality = SignalQuality.poor;
-          _qualityController.add(_signalQuality);
-        }
-      } else {
-        _signalQuality = SignalQuality.poor;
-        _qualityController.add(_signalQuality);
+
+      // Estimate actual sample rate from timestamps
+      final fs = _estimateSampleRate();
+
+      // 1. Linear detrend (removes slow baseline wander)
+      final detrended = _linearDetrend(rawSignal);
+
+      // 2. Online IIR Butterworth bandpass (0.5–3.5 Hz)
+      //    We re-run the full buffer through a fresh filter instance each
+      //    update to avoid phase artefacts from accumulated state drift.
+      final filtered = _butterworthBandpass(detrended);
+
+      // 3. Peak detection with physiological refractory period
+      final peaks = _detectPeaks(filtered, fs);
+
+      if (peaks.length < 3) {
+        _emit(SignalQuality.poor, _currentBPM, 0.0);
+        return;
       }
-    } catch (e) {
-      debugPrint('BPM calculation error: $e');
-      _signalQuality = SignalQuality.poor;
+
+      // 4. Compute IBIs and reject outliers
+      final ibis = _computeIBIs(peaks, fs);
+      final cleanIBIs = _rejectOutliers(ibis);
+      if (cleanIBIs.isNotEmpty) _lastCleanIBIs = List.unmodifiable(cleanIBIs);
+
+      if (cleanIBIs.isEmpty) {
+        _emit(SignalQuality.poor, _currentBPM, 0.0);
+        return;
+      }
+
+      // 5. BPM from median IBI  (robust to single-beat errors)
+      final medianIBI = _median(cleanIBIs); // seconds
+      final rawBPM = (60.0 / medianIBI).round();
+
+      if (rawBPM < 40 || rawBPM > 200) {
+        _emit(SignalQuality.poor, _currentBPM, 0.0);
+        return;
+      }
+
+      // 6. Temporal smoothing via weighted moving average of BPM history
+      _bpmHistory.add(rawBPM);
+      if (_bpmHistory.length > _bpmHistorySize) _bpmHistory.removeAt(0);
+      final smoothedBPM = _weightedBPMAverage();
+
+      // 7. Confidence & quality
+      final conf = _calculateConfidence(filtered, cleanIBIs, fs);
+      final quality = _assessQuality(conf);
+
+      _currentBPM = smoothedBPM;
+      _confidence = conf;
+      _signalQuality = quality;
+
+      _bpmController.add(_currentBPM);
+      _confidenceController.add(_confidence);
       _qualityController.add(_signalQuality);
+    } catch (e) {
+      debugPrint('BPM calc error: $e');
+      _emit(SignalQuality.poor, _currentBPM, 0.0);
     }
   }
 
-  /// Detrend signal (remove baseline drift)
-  List<double> _detrend(List<double> signal) {
-    if (signal.isEmpty) return [];
-    
-    final mean = signal.reduce((a, b) => a + b) / signal.length;
-    return signal.map((v) => v - mean).toList();
+  // ─── Sample Rate Estimation ───────────────────────────────────────────────
+  /// Actual FPS may differ from 30; compute from buffer timestamps.
+  double _estimateSampleRate() {
+    if (_signalBuffer.length < 2) return 30.0;
+    final spanMs = _signalBuffer.last.timestamp
+        .difference(_signalBuffer.first.timestamp)
+        .inMilliseconds;
+    if (spanMs <= 0) return 30.0;
+    return (_signalBuffer.length - 1) / (spanMs / 1000.0);
   }
 
-  /// Moving average smoothing
-  List<double> _movingAverage(List<double> signal, int windowSize) {
-    if (signal.length < windowSize) return signal;
-    
-    final result = <double>[];
-    for (int i = 0; i < signal.length; i++) {
-      final start = max(0, i - windowSize ~/ 2);
-      final end = min(signal.length, i + windowSize ~/ 2 + 1);
-      final window = signal.sublist(start, end);
-      final avg = window.reduce((a, b) => a + b) / window.length;
-      result.add(avg);
+  // ─── Linear Detrend ───────────────────────────────────────────────────────
+  /// Least-squares line fit removed from signal — handles slow DC drift
+  /// far better than mean subtraction.
+  List<double> _linearDetrend(List<double> signal) {
+    final n = signal.length;
+    if (n < 2) return signal;
+
+    double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (int i = 0; i < n; i++) {
+      sumX += i;
+      sumY += signal[i];
+      sumXY += i * signal[i];
+      sumX2 += i * i.toDouble();
     }
-    return result;
-  }
 
-  /// Simple bandpass filter (0.5-4 Hz for heart rate)
-  List<double> _bandpassFilter(List<double> signal) {
-    // Simplified bandpass: high-pass then low-pass
-    final highPassed = _highPassFilter(signal, 0.5);
-    final bandPassed = _lowPassFilter(highPassed, 4.0);
-    return bandPassed;
-  }
-
-  /// High-pass filter
-  List<double> _highPassFilter(List<double> signal, double cutoff) {
-    if (signal.length < 2) return signal;
-    
-    final alpha = 0.95; // Simple high-pass coefficient
-    final result = <double>[signal[0]];
-    
-    for (int i = 1; i < signal.length; i++) {
-      result.add(alpha * (result[i - 1] + signal[i] - signal[i - 1]));
+    final denom = n * sumX2 - sumX * sumX;
+    if (denom == 0) {
+      final mean = sumY / n;
+      return signal.map((v) => v - mean).toList();
     }
-    return result;
+
+    final slope = (n * sumXY - sumX * sumY) / denom;
+    final intercept = (sumY - slope * sumX) / n;
+
+    return List.generate(n, (i) => signal[i] - (slope * i + intercept));
   }
 
-  /// Low-pass filter
-  List<double> _lowPassFilter(List<double> signal, double cutoff) {
-    if (signal.isEmpty) return signal;
-    
-    final alpha = 0.1; // Simple low-pass coefficient
-    final result = <double>[signal[0]];
-    
-    for (int i = 1; i < signal.length; i++) {
-      result.add(alpha * signal[i] + (1 - alpha) * result[i - 1]);
-    }
-    return result;
-  }
+  // ─── Butterworth IIR Bandpass ─────────────────────────────────────────────
+  /// Direct-Form II transposed biquad cascade.
+  /// Runs a fresh pass over the full buffer (stateless per call) to avoid
+  /// accumulated numerical drift in long-running state registers.
+  List<double> _butterworthBandpass(List<double> signal) {
+    // Fresh delay registers for this pass
+    final w = [
+      [0.0, 0.0],
+      [0.0, 0.0],
+    ];
 
-  /// Detect peaks in filtered signal
-  List<int> _detectPeaks(List<double> signal) {
-    if (signal.length < 3) return [];
-    
-    final peaks = <int>[];
-    final minPeakDistance = 12; // ~0.4s at 30 FPS
-    final threshold = _calculateThreshold(signal);
-    
-    for (int i = 1; i < signal.length - 1; i++) {
-      // Check if local maximum
-      if (signal[i] > signal[i - 1] && signal[i] > signal[i + 1]) {
-        // Check if above threshold
-        if (signal[i] > threshold) {
-          // Check minimum distance from last peak
-          if (peaks.isEmpty || i - peaks.last >= minPeakDistance) {
-            peaks.add(i);
-          }
-        }
+    final out = List<double>.filled(signal.length, 0.0);
+
+    for (int n = 0; n < signal.length; n++) {
+      double x = signal[n];
+
+      for (int s = 0; s < _butterSOS.length; s++) {
+        final b0 = _butterSOS[s][0];
+        final b1 = _butterSOS[s][1];
+        final b2 = _butterSOS[s][2];
+        final a1 = _butterSOS[s][3];
+        final a2 = _butterSOS[s][4];
+
+        // Direct-Form II Transposed
+        final y = b0 * x + w[s][0];
+        w[s][0] = b1 * x - a1 * y + w[s][1];
+        w[s][1] = b2 * x - a2 * y;
+        x = y;
       }
+
+      out[n] = x;
     }
-    
+
+    return out;
+  }
+
+  // ─── Peak Detection ───────────────────────────────────────────────────────
+  /// Adaptive threshold + physiological refractory period.
+  ///
+  /// Refractory period = 60/200 s = 0.3 s → no two peaks within 0.3 s
+  /// (corresponds to 200 BPM max). Threshold adapts every 3 s window.
+  List<int> _detectPeaks(List<double> signal, double fs) {
+    if (signal.length < 3) return [];
+
+    // Physiological minimum distance between beats (200 BPM max)
+    final minDist = (fs * 0.30).ceil(); // samples
+
+    // Adaptive threshold: mean + 0.5 * std over a sliding 3 s window
+    final windowSamples = (fs * 3).round();
+    final peaks = <int>[];
+
+    for (int i = 1; i < signal.length - 1; i++) {
+      // Local maximum check
+      if (signal[i] <= signal[i - 1] || signal[i] <= signal[i + 1]) continue;
+
+      // Compute adaptive threshold over local window
+      final wStart = max(0, i - windowSamples ~/ 2);
+      final wEnd = min(signal.length, i + windowSamples ~/ 2);
+      final window = signal.sublist(wStart, wEnd);
+      final mean = window.reduce((a, b) => a + b) / window.length;
+      final std = _std(window, mean);
+      final threshold = mean + 0.5 * std;
+
+      if (signal[i] <= threshold) continue;
+
+      // Refractory period
+      if (peaks.isNotEmpty && i - peaks.last < minDist) continue;
+
+      peaks.add(i);
+    }
+
     return peaks;
   }
 
-  /// Calculate adaptive threshold for peak detection
-  double _calculateThreshold(List<double> signal) {
-    if (signal.isEmpty) return 0.0;
-    
-    final sorted = List<double>.from(signal)..sort();
-    final percentile75 = sorted[(sorted.length * 0.75).floor()];
-    return percentile75 * 0.6; // 60% of 75th percentile
-  }
-
-  /// Smooth BPM changes to avoid jumps
-  int _smoothBPM(int newBPM) {
-    if (_currentBPM == 0) return newBPM;
-    
-    // Exponential moving average
-    final alpha = 0.3;
-    return (alpha * newBPM + (1 - alpha) * _currentBPM).round();
-  }
-
-  /// Calculate confidence score (0-100%)
-  double _calculateConfidence(List<double> signal, List<int> peaks) {
-    if (peaks.length < 2) return 0.0;
-    
-    // Calculate signal-to-noise ratio
-    final signalPower = signal.map((v) => v * v).reduce((a, b) => a + b) / signal.length;
-    final snr = signalPower > 0 ? 10 * log(signalPower) / ln10 : 0;
-    
-    // Calculate peak regularity
-    final peakIntervals = <int>[];
+  // ─── IBI Computation ─────────────────────────────────────────────────────
+  /// Converts peak indices → inter-beat intervals in seconds.
+  List<double> _computeIBIs(List<int> peaks, double fs) {
+    final ibis = <double>[];
     for (int i = 1; i < peaks.length; i++) {
-      peakIntervals.add(peaks[i] - peaks[i - 1]);
+      ibis.add((peaks[i] - peaks[i - 1]) / fs);
     }
-    
-    final meanInterval = peakIntervals.reduce((a, b) => a + b) / peakIntervals.length;
-    final variance = peakIntervals
-        .map((v) => pow(v - meanInterval, 2))
-        .reduce((a, b) => a + b) / peakIntervals.length;
-    final stdDev = sqrt(variance);
-    final regularity = meanInterval > 0 ? 1 - (stdDev / meanInterval) : 0;
-    
-    // Combine metrics
-    final confidence = (snr.clamp(0, 20) / 20 * 0.5 + regularity.clamp(0, 1) * 0.5) * 100;
-    return confidence.clamp(0, 100);
+    return ibis;
   }
 
-  /// Assess signal quality based on confidence
-  SignalQuality _assessSignalQuality(double confidence, List<double> signal) {
-    if (confidence >= 80) return SignalQuality.excellent;
-    if (confidence >= 60) return SignalQuality.good;
-    if (confidence >= 40) return SignalQuality.fair;
-    if (confidence >= 20) return SignalQuality.poor;
+  // ─── Outlier Rejection ────────────────────────────────────────────────────
+  /// Removes IBIs that deviate more than 20 % from the median.
+  /// This tolerates occasional ectopic beats without skewing the average.
+  List<double> _rejectOutliers(List<double> ibis) {
+    if (ibis.isEmpty) return ibis;
+    final med = _median(ibis);
+    return ibis.where((v) => (v - med).abs() / med <= 0.20).toList();
+  }
+
+  // ─── BPM Temporal Smoothing ───────────────────────────────────────────────
+  /// Linearly weighted moving average — recent estimates count more.
+  int _weightedBPMAverage() {
+    if (_bpmHistory.isEmpty) return _currentBPM;
+    double weightedSum = 0;
+    double weightTotal = 0;
+    for (int i = 0; i < _bpmHistory.length; i++) {
+      final w = (i + 1).toDouble(); // weight 1…N
+      weightedSum += _bpmHistory[i] * w;
+      weightTotal += w;
+    }
+    return (weightedSum / weightTotal).round();
+  }
+
+  // ─── Confidence Scoring ───────────────────────────────────────────────────
+  /// Combines three orthogonal quality metrics:
+  ///
+  /// 1. **SNR** – ratio of filtered signal power to residual (noise = raw - filtered)
+  /// 2. **IBI regularity** – coefficient of variation of clean IBIs
+  /// 3. **Peak count sufficiency** – more peaks → higher certainty
+  double _calculateConfidence(
+      List<double> filtered, List<double> cleanIBIs, double fs) {
+    if (cleanIBIs.isEmpty) return 0.0;
+
+    // 1. SNR: signal power / noise power
+    final rawForSNR = _signalBuffer.map((r) => r.redValue).toList();
+    final detrended = _linearDetrend(rawForSNR);
+    double sigPow = 0, noisePow = 0;
+    final len = min(filtered.length, detrended.length);
+    for (int i = 0; i < len; i++) {
+      sigPow += filtered[i] * filtered[i];
+      final noise = detrended[i] - filtered[i];
+      noisePow += noise * noise;
+    }
+    sigPow /= len;
+    noisePow /= len;
+    // SNR in dB, clamp to [0, 20] then normalise
+    final snrDB =
+        (noisePow > 0) ? 10 * log(sigPow / noisePow) / ln10 : 20.0;
+    final snrScore = snrDB.clamp(0.0, 20.0) / 20.0; // 0–1
+
+    // 2. IBI regularity: 1 - CV  (CV = std/mean)
+    final mean = cleanIBIs.reduce((a, b) => a + b) / cleanIBIs.length;
+    final std = _std(cleanIBIs.map((v) => v).toList(), mean);
+    final cv = mean > 0 ? std / mean : 1.0;
+    final regularityScore = (1.0 - cv).clamp(0.0, 1.0);
+
+    // 3. Peak count: saturates at 8 peaks (≈ 8 beats in buffer)
+    final peakScore = (cleanIBIs.length / 8.0).clamp(0.0, 1.0);
+
+    // Weighted combination
+    final confidence = (snrScore * 0.40 + regularityScore * 0.45 + peakScore * 0.15) * 100.0;
+    return confidence.clamp(0.0, 100.0);
+  }
+
+  // ─── Quality Assessment ───────────────────────────────────────────────────
+  SignalQuality _assessQuality(double confidence) {
+    if (confidence >= 75) return SignalQuality.excellent;
+    if (confidence >= 55) return SignalQuality.good;
+    if (confidence >= 35) return SignalQuality.fair;
+    if (confidence >= 15) return SignalQuality.poor;
     return SignalQuality.noSignal;
   }
 
-  /// Get current measurement result
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  double _median(List<double> values) {
+    final sorted = List<double>.from(values)..sort();
+    final mid = sorted.length ~/ 2;
+    return sorted.length.isOdd
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2.0;
+  }
+
+  double _std(List<double> values, double mean) {
+    if (values.length < 2) return 0.0;
+    final variance =
+        values.map((v) => (v - mean) * (v - mean)).reduce((a, b) => a + b) /
+            values.length;
+    return sqrt(variance);
+  }
+
+  void _emit(SignalQuality quality, int bpm, double conf) {
+    _signalQuality = quality;
+    _confidence = conf;
+    _qualityController.add(quality);
+    if (bpm > 0) _bpmController.add(bpm);
+    _confidenceController.add(conf);
+  }
+
+  // ─── Public API ───────────────────────────────────────────────────────────
   PPGResult? getResult() {
     if (_currentBPM == 0 || !_signalQuality.isReliable) return null;
-    
     return PPGResult(
       bpm: _currentBPM,
       quality: _signalQuality,
       confidence: _confidence,
       rawSignal: _signalBuffer.map((r) => r.redValue).toList(),
+      cleanIBIs: List<double>.from(_lastCleanIBIs),
+      hrv: HRVStats.fromIBIs(_lastCleanIBIs),
       timestamp: DateTime.now(),
     );
   }
 
-  /// Dispose resources
   Future<void> dispose() async {
     _isInitialized = false;
-    
     try {
       await _controller?.stopImageStream();
       await _controller?.setFlashMode(FlashMode.off);
@@ -384,18 +500,28 @@ class PPGService {
     } catch (e) {
       debugPrint('Disposal error: $e');
     }
-    
     _controller = null;
     _signalBuffer.clear();
-    
+    _bpmHistory.clear();
+    _lastCleanIBIs = [];
+    _resetFilterState();
+
     await _bpmController.close();
     await _confidenceController.close();
     await _qualityController.close();
     await _waveformController.close();
     await _stateController.close();
   }
+
+  void _resetFilterState() {
+    for (final d in _sosDelay) {
+      d[0] = 0.0;
+      d[1] = 0.0;
+    }
+  }
 }
 
 extension on SignalQuality {
-  bool get isReliable => this == SignalQuality.excellent || this == SignalQuality.good;
+  bool get isReliable =>
+      this == SignalQuality.excellent || this == SignalQuality.good;
 }

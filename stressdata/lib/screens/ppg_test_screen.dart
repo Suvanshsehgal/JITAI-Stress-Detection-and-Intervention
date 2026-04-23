@@ -464,7 +464,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_currentState == PPGState.measuring && _currentBPM > 0)
+            if (_currentBPM > 0)
               TweenAnimationBuilder<int>(
                 tween: IntTween(begin: 0, end: _currentBPM),
                 duration: const Duration(milliseconds: 500),
@@ -491,7 +491,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
               ),
             const SizedBox(height: 8),
             Text(
-              _currentState == PPGState.measuring && _currentBPM > 0
+              _currentBPM > 0
                   ? 'BPM'
                   : _currentState == PPGState.warmingUp
                       ? 'Warming Up'
@@ -502,7 +502,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
                 color: Color(0xFF666666),
               ),
             ),
-            if (_currentState == PPGState.measuring && _confidence > 0) ...[
+            if (_currentBPM > 0 && _confidence > 0) ...[
               const SizedBox(height: 8),
               _buildConfidenceIndicator(),
             ],
