@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'screens/splash.dart';
 import 'screens/profile_screen.dart';
 import 'core/theme/colors.dart';
+import 'config/supabase_config.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase
+  await SupabaseConfig.init();
 
   // 🔥 Enable edge-to-edge UI (IMPORTANT)
   SystemChrome.setEnabledSystemUIMode(
