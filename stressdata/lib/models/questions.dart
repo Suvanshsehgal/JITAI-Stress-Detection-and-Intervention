@@ -9,7 +9,17 @@ List<Option> who5Options = [
   Option(text: "All of the time", value: 5),
 ];
 
+List<Option> stressOptions = [
+  Option(text: "Not at all", value: 1),
+  Option(text: "Slightly", value: 2),
+  Option(text: "Moderately", value: 3),
+  Option(text: "Very", value: 4),
+  Option(text: "Extremely", value: 5),
+];
+
+// Combined list of all 10 questions for the questionnaire
 List<Question> who5Questions = [
+  // Pre-test questions (1-5)
   Question(
     id: 1,
     questionText: "I have felt cheerful and in good spirits",
@@ -36,23 +46,11 @@ List<Question> who5Questions = [
   ),
   Question(
     id: 5,
-    questionText:
-        "My daily life has been filled with things that interest me",
+    questionText: "My daily life has been filled with things that interest me",
     category: "who5",
     options: who5Options,
   ),
-];
-
-
-List<Option> stressOptions = [
-  Option(text: "Not at all", value: 1),
-  Option(text: "Slightly", value: 2),
-  Option(text: "Moderately", value: 3),
-  Option(text: "Very", value: 4),
-  Option(text: "Extremely", value: 5),
-];
-
-List<Question> postStressQuestions = [
+  // Post-test questions (6-10)
   Question(
     id: 6,
     questionText: "I feel stressed",
@@ -84,3 +82,6 @@ List<Question> postStressQuestions = [
     options: stressOptions,
   ),
 ];
+
+// Deprecated - kept for backward compatibility
+List<Question> postStressQuestions = who5Questions.sublist(5, 10);
