@@ -5,11 +5,15 @@ class DatabaseService {
 
   // Create a new test session
   Future<String> createSession(String userId) async {
+    final now = DateTime.now();
+    
     final res = await supabase
         .from('test_sessions')
         .insert({
           'user_id': userId,
-          'start_time': DateTime.now().toIso8601String(),
+          'start_time': now.toIso8601String(),
+          'test_start_hour': now.hour,
+          'day_of_week': now.weekday,
         })
         .select()
         .single();
@@ -34,7 +38,8 @@ class DatabaseService {
     required int q4,
     required int q5,
   }) async {
-    final total = q1 + q2 + q3 + q4 + q5;
+    final totalScore = q1 + q2 + q3 + q4 + q5;
+    final normalizedScore = totalScore / 25.0;
 
     await supabase.from('who5_responses').insert({
       'session_id': sessionId,
@@ -44,11 +49,28 @@ class DatabaseService {
       'q3': q3,
       'q4': q4,
       'q5': q5,
-      'total_score': total,
-      'normalized_score': total / 25.0, // 0-1 range as per your schema
+      'total_score': totalScore,
+      'normalized_score': normalizedScore,
     });
   }
 
+  // Insert all cognitive metrics at once (NEW METHOD)
+  Future<void> insertCognitiveMetrics({
+    required String sessionId,
+    required String userId,
+    required Map<String, dynamic> metrics,
+  }) async {
+    final data = {
+      'session_id': sessionId,
+      'user_id': userId,
+      ...metrics, // Spread all collected metrics
+    };
+
+    await supabase.from('cognitive_metrics').insert(data);
+  }
+
+  // DEPRECATED: Use SessionManager.storeSpeedMetrics() + SessionManager.saveCognitiveMetrics() instead
+  @Deprecated('Use SessionManager for consolidated metric saving')
   // Insert Speed Answer Test results into cognitive_metrics
   Future<void> insertSpeedAnswerResults({
     required String sessionId,
@@ -84,6 +106,8 @@ class DatabaseService {
     }
   }
 
+  // DEPRECATED: Use SessionManager.storeStroopMetrics() + SessionManager.saveCognitiveMetrics() instead
+  @Deprecated('Use SessionManager for consolidated metric saving')
   // Insert Stroop Test results into cognitive_metrics
   Future<void> insertStroopResults({
     required String sessionId,
@@ -119,6 +143,8 @@ class DatabaseService {
     }
   }
 
+  // DEPRECATED: Use SessionManager.storeMemoryMetrics() + SessionManager.saveCognitiveMetrics() instead
+  @Deprecated('Use SessionManager for consolidated metric saving')
   // Insert Pattern Memory Test results into cognitive_metrics
   Future<void> insertPatternMemoryResults({
     required String sessionId,
