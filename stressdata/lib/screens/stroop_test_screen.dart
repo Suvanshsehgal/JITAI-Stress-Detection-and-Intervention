@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../models/stroop_test_model.dart';
 import '../services/session_manager.dart';
-import '../services/database_service.dart';
 
 class StroopTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
@@ -29,7 +28,6 @@ class _StroopTestScreenState extends State<StroopTestScreen>
   int _streak = 0;
   bool _answered = false;
   final SessionManager _sessionManager = SessionManager();
-  final DatabaseService _dbService = DatabaseService();
   late AnimationController _pulseController;
   late AnimationController _progressController;
 
@@ -216,13 +214,6 @@ class _StroopTestScreenState extends State<StroopTestScreen>
 
   Future<void> _saveToDatabase() async {
     try {
-      final sessionId = _sessionManager.sessionId;
-      final userId = _sessionManager.userId;
-
-      if (sessionId == null || userId == null) {
-        throw Exception('No active session or user');
-      }
-
       // Calculate metrics
       final correctAnswers = _answers.where((a) => a.isCorrect).length;
       final totalQuestions = _answers.length;
@@ -231,23 +222,26 @@ class _StroopTestScreenState extends State<StroopTestScreen>
         (sum, answer) => sum + answer.responseTime,
       );
       final averageResponseTime = totalResponseTime / totalQuestions;
+      final accuracy = correctAnswers / totalQuestions;
+      
+      // Calculate interference score (simplified: ratio of errors on incongruent vs congruent trials)
+      // For now, using a basic calculation - can be enhanced later
+      final interferenceScore = 1.0 - accuracy;
 
-      await _dbService.insertStroopResults(
-        sessionId: sessionId,
-        userId: userId,
-        score: _score,
-        correctAnswers: correctAnswers,
-        totalQuestions: totalQuestions,
-        averageResponseTime: averageResponseTime,
+      // Store metrics in SessionManager (will be saved after all cognitive tests)
+      _sessionManager.storeStroopMetrics(
+        accuracy: accuracy,
+        avgResponseTime: averageResponseTime,
+        interferenceScore: interferenceScore,
       );
 
-      debugPrint('✅ Stroop Test data saved successfully');
+      debugPrint('✅ Stroop Test metrics stored in SessionManager');
     } catch (e) {
-      debugPrint('❌ Failed to save Stroop Test data: $e');
+      debugPrint('❌ Failed to store Stroop Test metrics: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save test results: $e'),
+            content: Text('Failed to store test metrics: $e'),
             backgroundColor: Colors.red,
           ),
         );

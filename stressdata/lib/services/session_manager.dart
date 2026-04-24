@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'database_service.dart';
 import 'auth_service.dart';
 
@@ -14,17 +15,91 @@ class SessionManager {
   String? _currentSessionId;
   String? get sessionId => _currentSessionId;
 
+  // Store cognitive metrics from each test
+  final Map<String, dynamic> _cognitiveMetrics = {};
+
+  /// Store Speed Test metrics
+  void storeSpeedMetrics({
+    required double accuracy,
+    required double avgResponseTime,
+    required int streakMax,
+    int commissionErrors = 0,
+    int omissionErrors = 0,
+  }) {
+    _cognitiveMetrics['speed_accuracy'] = accuracy;
+    _cognitiveMetrics['avg_response_time'] = avgResponseTime;
+    _cognitiveMetrics['streak_max'] = streakMax;
+    _cognitiveMetrics['commission_errors'] = commissionErrors;
+    _cognitiveMetrics['omission_errors'] = omissionErrors;
+    debugPrint('✅ Speed Test metrics stored');
+  }
+
+  /// Store Stroop Test metrics
+  void storeStroopMetrics({
+    required double accuracy,
+    required double avgResponseTime,
+    double interferenceScore = 0.0,
+  }) {
+    _cognitiveMetrics['stroop_accuracy'] = accuracy;
+    _cognitiveMetrics['stroop_avg_response_time'] = avgResponseTime;
+    _cognitiveMetrics['stroop_interference_score'] = interferenceScore;
+    debugPrint('✅ Stroop Test metrics stored');
+  }
+
+  /// Store Pattern Memory Test metrics
+  void storeMemoryMetrics({
+    required int maxLevel,
+    required double accuracy,
+  }) {
+    _cognitiveMetrics['memory_max_level'] = maxLevel;
+    _cognitiveMetrics['memory_accuracy'] = accuracy;
+    debugPrint('✅ Memory Test metrics stored');
+  }
+
+  /// Save all cognitive metrics to database (call after all cognitive tests complete)
+  Future<void> saveCognitiveMetrics() async {
+    if (_currentSessionId == null) {
+      debugPrint('❌ No active session to save cognitive metrics');
+      return;
+    }
+
+    if (_cognitiveMetrics.isEmpty) {
+      debugPrint('⚠️ No cognitive metrics to save');
+      return;
+    }
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
+
+      await _dbService.insertCognitiveMetrics(
+        sessionId: _currentSessionId!,
+        userId: user.id,
+        metrics: _cognitiveMetrics,
+      );
+
+      debugPrint('✅ Cognitive metrics saved to database');
+      _cognitiveMetrics.clear(); // Clear after saving
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to save cognitive metrics: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+    }
+  }
+
   /// Start a new test session
   Future<bool> startSession() async {
     try {
-      final userId = _authService.userId;
+      // Get logged-in user
+      final user = Supabase.instance.client.auth.currentUser;
       
-      if (userId == null) {
+      if (user == null) {
         debugPrint('❌ SessionManager: No user logged in');
-        debugPrint('❌ Current user: ${_authService.currentUser}');
         return false;
       }
 
+      final userId = user.id;
       debugPrint('✅ SessionManager: User ID found: $userId');
       debugPrint('✅ SessionManager: Creating session...');
       

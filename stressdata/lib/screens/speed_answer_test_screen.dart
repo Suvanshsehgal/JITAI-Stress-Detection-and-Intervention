@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../models/speed_answer_model.dart';
 import '../services/session_manager.dart';
-import '../services/database_service.dart';
 
 class SpeedAnswerTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
@@ -30,7 +29,6 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
   int _maxStreak = 0;
   bool _answered = false;
   final SessionManager _sessionManager = SessionManager();
-  final DatabaseService _dbService = DatabaseService();
   late AnimationController _pulseController;
   late AnimationController _progressController;
   late AnimationController _shakeController;
@@ -237,13 +235,6 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
 
   Future<void> _saveToDatabase() async {
     try {
-      final sessionId = _sessionManager.sessionId;
-      final userId = _sessionManager.userId;
-
-      if (sessionId == null || userId == null) {
-        throw Exception('No active session or user');
-      }
-
       // Calculate metrics
       final correctAnswers = _answers.where((a) => a.isCorrect).length;
       final totalQuestions = _answers.length;
@@ -252,23 +243,28 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
         (sum, answer) => sum + answer.responseTime,
       );
       final averageResponseTime = totalResponseTime / totalQuestions;
+      final accuracy = correctAnswers / totalQuestions;
+      
+      // Count errors
+      final commissionErrors = _answers.where((a) => !a.isCorrect && a.selectedAnswer.isNotEmpty).length;
+      final omissionErrors = _answers.where((a) => a.selectedAnswer.isEmpty).length;
 
-      await _dbService.insertSpeedAnswerResults(
-        sessionId: sessionId,
-        userId: userId,
-        score: _score,
-        correctAnswers: correctAnswers,
-        totalQuestions: totalQuestions,
-        averageResponseTime: averageResponseTime,
+      // Store metrics in SessionManager (will be saved after all cognitive tests)
+      _sessionManager.storeSpeedMetrics(
+        accuracy: accuracy,
+        avgResponseTime: averageResponseTime,
+        streakMax: _maxStreak,
+        commissionErrors: commissionErrors,
+        omissionErrors: omissionErrors,
       );
 
-      debugPrint('✅ Speed Answer data saved successfully');
+      debugPrint('✅ Speed Answer metrics stored in SessionManager');
     } catch (e) {
-      debugPrint('❌ Failed to save Speed Answer data: $e');
+      debugPrint('❌ Failed to store Speed Answer metrics: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save test results: $e'),
+            content: Text('Failed to store test metrics: $e'),
             backgroundColor: Colors.red,
           ),
         );

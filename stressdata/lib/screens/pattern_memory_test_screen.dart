@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../models/pattern_memory_model.dart';
 import '../services/session_manager.dart';
-import '../services/database_service.dart';
 
 class PatternMemoryTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
@@ -30,7 +29,6 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   List<int> _selectedCells = [];
   DateTime? _questionStartTime;
   final SessionManager _sessionManager = SessionManager();
-  final DatabaseService _dbService = DatabaseService();
   late AnimationController _pulseController;
   late AnimationController _fadeController;
 
@@ -203,38 +201,29 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
 
   Future<void> _saveToDatabase() async {
     try {
-      final sessionId = _sessionManager.sessionId;
-      final userId = _sessionManager.userId;
-
-      if (sessionId == null || userId == null) {
-        throw Exception('No active session or user');
-      }
-
       // Calculate metrics
       final correctAnswers = _answers.where((a) => a.isCorrect).length;
       final totalQuestions = _answers.length;
-      final totalResponseTime = _answers.fold<int>(
-        0,
-        (sum, answer) => sum + answer.responseTime,
-      );
-      final averageResponseTime = totalResponseTime / totalQuestions;
+      final accuracy = correctAnswers / totalQuestions;
+      final maxLevel = _currentQuestionIndex + 1; // Highest level reached
 
-      await _dbService.insertPatternMemoryResults(
-        sessionId: sessionId,
-        userId: userId,
-        score: _score,
-        correctAnswers: correctAnswers,
-        totalQuestions: totalQuestions,
-        averageResponseTime: averageResponseTime,
+      // Store metrics in SessionManager (will be saved after all cognitive tests)
+      _sessionManager.storeMemoryMetrics(
+        maxLevel: maxLevel,
+        accuracy: accuracy,
       );
 
-      debugPrint('✅ Pattern Memory data saved successfully');
+      debugPrint('✅ Pattern Memory metrics stored in SessionManager');
+      
+      // NOW save all cognitive metrics to database (this is the last cognitive test)
+      await _sessionManager.saveCognitiveMetrics();
+      
     } catch (e) {
-      debugPrint('❌ Failed to save Pattern Memory data: $e');
+      debugPrint('❌ Failed to store/save Pattern Memory metrics: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save test results: $e'),
+            content: Text('Failed to save test metrics: $e'),
             backgroundColor: Colors.red,
           ),
         );
