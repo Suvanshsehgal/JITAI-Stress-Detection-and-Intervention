@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/questions.dart';
 import '../models/question_model.dart';
 import '../widget/custom_button.dart';
@@ -73,44 +74,40 @@ class _QuestionnaireTestScreenState extends State<QuestionnaireTestScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // Get session ID (must already exist)
       final sessionId = _sessionManager.sessionId;
-      final userId = _sessionManager.userId;
-
-      if (sessionId == null || userId == null) {
-        throw Exception('No active session or user');
+      if (sessionId == null) {
+        throw Exception('No active session - session must be created before saving WHO-5');
       }
 
-      // Calculate scores based on all 10 questions
-      // If this is pre-test (questions 1-5), we only have partial data
-      // If this is post-test (questions 6-10), we need to combine with pre-test
-      
-      // For now, save what we have
-      if (widget.startIndex == 0 && widget.endIndex == 5) {
-        // Pre-test: Save first 5 questions
-        await _dbService.insertWHO5(
-          sessionId: sessionId,
-          userId: userId,
-          q1: _answers[0].selectedValue,
-          q2: _answers[1].selectedValue,
-          q3: _answers[2].selectedValue,
-          q4: _answers[3].selectedValue,
-          q5: _answers[4].selectedValue,
-        );
-      } else if (widget.startIndex == 5 && widget.endIndex == 10) {
-        // Post-test: Save last 5 questions
-        // Note: You may want to update the same record or create a new one
-        await _dbService.insertWHO5(
-          sessionId: sessionId,
-          userId: userId,
-          q1: _answers[0].selectedValue,
-          q2: _answers[1].selectedValue,
-          q3: _answers[2].selectedValue,
-          q4: _answers[3].selectedValue,
-          q5: _answers[4].selectedValue,
-        );
+      // Get logged-in user
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        throw Exception('No user logged in');
       }
+      final userId = user.id;
+
+      // Collect answers (q1-q5)
+      final q1 = _answers[0].selectedValue;
+      final q2 = _answers[1].selectedValue;
+      final q3 = _answers[2].selectedValue;
+      final q4 = _answers[3].selectedValue;
+      final q5 = _answers[4].selectedValue;
+
+      // Save to database
+      await _dbService.insertWHO5(
+        sessionId: sessionId,
+        userId: userId,
+        q1: q1,
+        q2: q2,
+        q3: q3,
+        q4: q4,
+        q5: q5,
+      );
 
       debugPrint('✅ WHO-5 data saved successfully');
+      debugPrint('   Session ID: $sessionId');
+      debugPrint('   Answers: q1=$q1, q2=$q2, q3=$q3, q4=$q4, q5=$q5');
     } catch (e) {
       debugPrint('❌ Failed to save WHO-5 data: $e');
       if (mounted) {

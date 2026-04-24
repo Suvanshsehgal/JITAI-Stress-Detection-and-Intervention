@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../models/test_stage.dart';
 import '../widget/custom_button.dart';
 import '../services/session_manager.dart';
-import '../services/database_service.dart';
 import 'ppg_test_screen.dart';
 import 'questionnaire_test_screen.dart';
 import 'stroop_test_screen.dart';
@@ -172,7 +171,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
   void _onStageComplete(TestStage stage, Map<String, dynamic> result) {
     setState(() {
       _progress.completedStages[stage] = true;
-      _progress.results['${stage.name}'] = result;
+      _progress.results[stage.name] = result;
 
       // Move to next stage
       final currentIndex = TestStage.values.indexOf(stage);
@@ -347,7 +346,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
                                     color: isCompleted
                                         ? const Color(0xFF9B2B1A)
                                         : isCurrent
-                                            ? const Color(0xFF9B2B1A).withOpacity(0.2)
+                                            ? const Color(0xFF9B2B1A).withValues(alpha: 0.2)
                                             : const Color(0xFFE5D5CC),
                                     shape: BoxShape.circle,
                                   ),
@@ -391,7 +390,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
                                 decoration: BoxDecoration(
                                   color: isCurrent
                                       ? Colors.white
-                                      : Colors.white.withOpacity(0.5),
+                                      : Colors.white.withValues(alpha: 0.5),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isCurrent
