@@ -1,4 +1,5 @@
 import '../config/supabase_config.dart';
+import 'package:flutter/foundation.dart';
 
 class DatabaseService {
   final supabase = SupabaseConfig.client;
@@ -223,16 +224,102 @@ class DatabaseService {
     return List<Map<String, dynamic>>.from(res);
   }
 
-  // Get latest test session
+  // Get latest COMPLETED test session (end_time must not be null)
   Future<Map<String, dynamic>?> getLatestSession(String userId) async {
+    try {
+      final response = await supabase
+          .from('test_sessions')
+          .select()
+          .eq('user_id', userId)
+          .not('end_time', 'is', null) // ONLY completed tests
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      debugPrint('✅ getLatestSession response: $response');
+
+      if (response.isEmpty) {
+        debugPrint('✅ No completed sessions found for user: $userId');
+        return null;
+      }
+
+      debugPrint('✅ Latest session found: ${response.first}');
+      return response.first;
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error fetching latest session: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
+  // Get total number of tests completed by user
+  Future<int> getTotalTests(String userId) async {
     final res = await supabase
         .from('test_sessions')
+        .select('id')
+        .eq('user_id', userId);
+
+    return (res as List).length;
+  }
+
+  // Get latest WHO-5 response for user
+  Future<Map<String, dynamic>?> getLatestWHO5(String userId) async {
+    final res = await supabase
+        .from('who5_responses')
         .select()
         .eq('user_id', userId)
-        .order('start_time', ascending: false)
+        .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
 
     return res;
+  }
+
+  // Get latest cognitive metrics for user
+  Future<Map<String, dynamic>?> getLatestCognitiveMetrics(String userId) async {
+    final res = await supabase
+        .from('cognitive_metrics')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    return res;
+  }
+
+  // Get latest physiological metrics for user
+  Future<Map<String, dynamic>?> getLatestPhysiologicalMetrics(String userId) async {
+    final res = await supabase
+        .from('physiological_metrics')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    return res;
+  }
+
+  // Get comprehensive user profile data
+  Future<Map<String, dynamic>> getUserProfileData(String userId) async {
+    try {
+      final totalTests = await getTotalTests(userId);
+      final latestSession = await getLatestSession(userId);
+      final latestWHO5 = await getLatestWHO5(userId);
+      final latestCognitive = await getLatestCognitiveMetrics(userId);
+      final latestPhysiological = await getLatestPhysiologicalMetrics(userId);
+
+      return {
+        'totalTests': totalTests,
+        'latestSession': latestSession,
+        'latestWHO5': latestWHO5,
+        'latestCognitive': latestCognitive,
+        'latestPhysiological': latestPhysiological,
+        'hasCompletedTest': latestSession != null,
+      };
+    } catch (e) {
+      debugPrint('❌ Failed to get user profile data: $e');
+      rethrow;
+    }
   }
 }

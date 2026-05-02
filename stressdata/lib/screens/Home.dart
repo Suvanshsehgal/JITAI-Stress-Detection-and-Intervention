@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme/colors.dart';
 import '../widget/home/greeting_header.dart';
 import '../widget/home/stress_score_card.dart';
@@ -7,6 +8,7 @@ import '../widget/home/mood_section.dart';
 import '../widget/home/weekly_insights_card.dart';
 import '../widget/home/recommendation_card.dart';
 import '../widget/bottom_nav_bar.dart';
+import '../services/database_service.dart';
 import 'test_screen.dart';
 import 'profile_screen.dart';
 import 'test_map_screen.dart';
@@ -20,10 +22,67 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  bool _hasCompletedTest = false; // Change to true to see dashboard
+  bool _hasCompletedTest = false;
+  bool _isLoading = true;
+  final DatabaseService _dbService = DatabaseService();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserTestStatus();
+  }
+
+  Future<void> _checkUserTestStatus() async {
+    try {
+      // Get current user safely
+      final user = Supabase.instance.client.auth.currentUser;
+      
+      if (user == null) {
+        debugPrint('❌ No user logged in');
+        setState(() {
+          _hasCompletedTest = false;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final userId = user.id;
+      debugPrint('✅ User ID: $userId');
+      
+      // Fetch latest COMPLETED session
+      final latestSession = await _dbService.getLatestSession(userId);
+      debugPrint('✅ Fetched session: $latestSession');
+      
+      // Update state
+      setState(() {
+        _hasCompletedTest = latestSession != null;
+        _isLoading = false;
+      });
+
+      debugPrint('✅ Has completed test: $_hasCompletedTest');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to check user test status: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      setState(() {
+        _hasCompletedTest = false;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF9B2B1A),
+          ),
+        ),
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -46,9 +105,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           builder: (context) => const TestMapScreen(),
                         ),
                       ).then((_) {
-                        setState(() {
-                          _hasCompletedTest = true;
-                        });
+                        // Refresh test status after returning from test
+                        debugPrint('🔄 Refreshing test status after test completion');
+                        _checkUserTestStatus();
                       });
                     },
                   ),

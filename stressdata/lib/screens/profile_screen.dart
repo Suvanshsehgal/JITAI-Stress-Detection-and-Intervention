@@ -1,13 +1,99 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme/colors.dart';
+import '../services/database_service.dart';
 import 'onboarding.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final DatabaseService _dbService = DatabaseService();
+  bool _isLoading = true;
+  int _totalTests = 0;
+  Map<String, dynamic>? _latestSession;
+  Map<String, dynamic>? _latestWHO5;
+  Map<String, dynamic>? _latestCognitive;
+  String _userName = 'User';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      
+      if (user == null) {
+        debugPrint('❌ No user logged in');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final userId = user.id;
+      final email = user.email ?? '';
+      
+      // Extract name from email (before @)
+      if (email.isNotEmpty) {
+        _userName = email.split('@').first.capitalize();
+      }
+
+      debugPrint('✅ Loading profile data for user: $userId');
+
+      final profileData = await _dbService.getUserProfileData(userId);
+
+      setState(() {
+        _totalTests = profileData['totalTests'] ?? 0;
+        _latestSession = profileData['latestSession'];
+        _latestWHO5 = profileData['latestWHO5'];
+        _latestCognitive = profileData['latestCognitive'];
+        _isLoading = false;
+      });
+
+      debugPrint('✅ Profile data loaded: $_totalTests tests');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to load profile data: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF9B2B1A),
+        ),
+      );
+    }
+
+    // Calculate average score from WHO-5 if available
+    final avgScore = _latestWHO5 != null 
+        ? ((_latestWHO5!['normalized_score'] ?? 0.0) * 100).round()
+        : 0;
+
+    // Get last test date
+    final lastTestDate = _latestSession != null
+        ? DateTime.parse(_latestSession!['start_time'])
+        : null;
+
+    final formattedDate = lastTestDate != null
+        ? _formatDate(lastTestDate)
+        : 'No tests yet';
+
+    // Calculate streak (simplified - days since last test)
+    final streakDays = lastTestDate != null
+        ? DateTime.now().difference(lastTestDate).inDays
+        : 0;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.only(
         left: 20,
@@ -35,10 +121,10 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'S',
-                    style: TextStyle(
+                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
+                    style: const TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -67,9 +153,9 @@ class ProfileScreen extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          const Text(
-            'Suvansh',
-            style: TextStyle(
+          Text(
+            _userName,
+            style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A0A08),
@@ -79,7 +165,7 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 4),
 
           Text(
-            'Mindfulness Explorer',
+            _totalTests > 0 ? 'Mindfulness Explorer' : 'New Explorer',
             style: TextStyle(
               fontSize: 16,
               color: const Color(0xFF1A0A08).withValues(alpha: 0.5),
@@ -92,53 +178,104 @@ class ProfileScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildStatItem('12', 'TESTS DONE'),
-              _buildCircularScore(85),
-              _buildStatItem('7d', 'STREAK'),
+              _buildStatItem('$_totalTests', 'TESTS DONE'),
+              _buildCircularScore(avgScore),
+              _buildStatItem('${streakDays}d', 'STREAK'),
             ],
           ),
 
           const SizedBox(height: 48),
 
           // Recent Test Results Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Test Results',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A0A08),
-                ),
-              ),
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  'View All',
+          if (_latestSession != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Test Results',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFFEA9B7E),
-                    fontWeight: FontWeight.w600,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A0A08),
                   ),
                 ),
+                TextButton(
+                  onPressed: () {},
+                  child: const Text(
+                    'View All',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFFEA9B7E),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            _buildTestResultCard(
+              date: formattedDate,
+              score: avgScore,
+              status: _getStatusLabel(avgScore),
+              statusColor: _getStatusColor(avgScore),
+              stroopPercent: _latestCognitive != null 
+                  ? ((_latestCognitive!['stroop_accuracy'] ?? 0.0) * 100).round()
+                  : 0,
+              speedPercent: _latestCognitive != null
+                  ? ((_latestCognitive!['speed_accuracy'] ?? 0.0) * 100).round()
+                  : 0,
+              patternPercent: _latestCognitive != null
+                  ? ((_latestCognitive!['memory_accuracy'] ?? 0.0) * 100).round()
+                  : 0,
+            ),
+
+            const SizedBox(height: 40),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          _buildTestResultCard(
-            date: 'Oct 24, 2023 • 10:30 AM',
-            score: 92,
-            status: 'EXCELLENT',
-            statusColor: const Color(0xFF2E7D5F),
-            stroopPercent: 88,
-            speedPercent: 96,
-            patternPercent: 92,
-          ),
-
-          const SizedBox(height: 40),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.psychology_outlined,
+                    size: 64,
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No Tests Yet',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A0A08),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Complete your first test to see your results here',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: const Color(0xFF1A0A08).withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
 
           _buildActionButton(
             icon: Icons.privacy_tip_outlined,
@@ -203,15 +340,18 @@ class ProfileScreen extends StatelessWidget {
                         child: const Text('Cancel'),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const OnboardingScreen(),
-                            ),
-                            (route) => false, // Remove all previous routes
-                          );
+                        onPressed: () async {
+                          await Supabase.instance.client.auth.signOut();
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close dialog
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const OnboardingScreen(),
+                              ),
+                              (route) => false,
+                            );
+                          }
                         },
                         child: const Text(
                           'Logout',
@@ -248,6 +388,32 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getStatusLabel(int score) {
+    if (score >= 80) return 'EXCELLENT';
+    if (score >= 60) return 'GOOD';
+    if (score >= 40) return 'FAIR';
+    return 'NEEDS ATTENTION';
+  }
+
+  Color _getStatusColor(int score) {
+    if (score >= 80) return const Color(0xFF2E7D5F);
+    if (score >= 60) return const Color(0xFFE8A547);
+    if (score >= 40) return const Color(0xFFEA9B7E);
+    return const Color(0xFFD64933);
+  }
+
+  String _formatDate(DateTime date) {
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final month = months[date.month - 1];
+    final day = date.day;
+    final year = date.year;
+    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = date.hour >= 12 ? 'PM' : 'AM';
+    
+    return '$month $day, $year • $hour:$minute $period';
   }
 
   Widget _buildStatItem(String value, String label) {
@@ -691,5 +857,14 @@ class _CircularScorePainter extends CustomPainter {
   @override
   bool shouldRepaint(_CircularScorePainter oldDelegate) {
     return oldDelegate.score != score || oldDelegate.color != color;
+  }
+}
+
+
+// String extension for capitalization
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1)}';
   }
 }
