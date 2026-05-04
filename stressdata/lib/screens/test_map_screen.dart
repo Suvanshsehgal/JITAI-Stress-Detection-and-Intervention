@@ -268,21 +268,38 @@ class _TestMapScreenState extends State<TestMapScreen> {
     // (all data — sensor, cognitive, PPG, WHO-5 — is already saved at this point)
     if (completedSessionId != null) {
       try {
-        debugPrint('📊 Computing stress score...');
+        debugPrint('📊 ═══════════════════════════════════════════════════');
+        debugPrint('📊 STARTING STRESS SCORE COMPUTATION');
+        debugPrint('📊 Session ID: $completedSessionId');
+        debugPrint('📊 ═══════════════════════════════════════════════════');
+        
         final stressResult =
             await StressScoreService().computeAndSave(completedSessionId);
+        
         if (stressResult != null) {
-          debugPrint('✅ Stress score: ${stressResult.stressScore.toStringAsFixed(3)} '
-              '(label: ${stressResult.stressLabelBinary}, '
-              'confidence: ${stressResult.labelConfidence.toStringAsFixed(3)})');
+          debugPrint('📊 ═══════════════════════════════════════════════════');
+          debugPrint('✅ STRESS SCORE COMPUTATION SUCCESSFUL');
+          debugPrint('✅ Score: ${stressResult.stressScore.toStringAsFixed(3)}');
+          debugPrint('✅ Label: ${stressResult.stressLabelBinary}');
+          debugPrint('✅ Confidence: ${stressResult.labelConfidence.toStringAsFixed(3)}');
+          debugPrint('📊 ═══════════════════════════════════════════════════');
         } else {
-          debugPrint('⚠️ Stress score returned null');
+          debugPrint('📊 ═══════════════════════════════════════════════════');
+          debugPrint('⚠️ STRESS SCORE COMPUTATION RETURNED NULL');
+          debugPrint('⚠️ This means computation failed but did not throw an error');
+          debugPrint('📊 ═══════════════════════════════════════════════════');
         }
-      } catch (e) {
-        debugPrint('❌ Stress score computation failed: $e');
+      } catch (e, stackTrace) {
+        debugPrint('📊 ═══════════════════════════════════════════════════');
+        debugPrint('❌ STRESS SCORE COMPUTATION FAILED WITH EXCEPTION');
+        debugPrint('❌ Error: $e');
+        debugPrint('❌ Stack trace: $stackTrace');
+        debugPrint('📊 ═══════════════════════════════════════════════════');
       }
     } else {
-      debugPrint('❌ Cannot compute stress score: session ID is null');
+      debugPrint('📊 ═══════════════════════════════════════════════════');
+      debugPrint('❌ CANNOT COMPUTE STRESS SCORE: SESSION ID IS NULL');
+      debugPrint('📊 ═══════════════════════════════════════════════════');
     }
 
     // STEP 2: End session (marks end_time, clears session ID)
