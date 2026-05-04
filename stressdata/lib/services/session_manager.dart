@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'database_service.dart';
 import 'auth_service.dart';
+import '../models/sensor_data.dart';
 
 /// Global session manager for test flow
 class SessionManager {
@@ -17,6 +18,9 @@ class SessionManager {
 
   // Store cognitive metrics from each test
   final Map<String, dynamic> _cognitiveMetrics = {};
+
+  // Store sensor behavior metrics from each phase
+  final List<SensorBehaviorMetrics> _sensorMetrics = [];
 
   /// Store Speed Test metrics
   void storeSpeedMetrics({
@@ -54,6 +58,47 @@ class SessionManager {
     _cognitiveMetrics['memory_max_level'] = maxLevel;
     _cognitiveMetrics['memory_accuracy'] = accuracy;
     debugPrint('✅ Memory Test metrics stored');
+  }
+
+  /// Store sensor behavior metrics
+  void storeSensorMetrics(SensorBehaviorMetrics metrics) {
+    _sensorMetrics.add(metrics);
+    debugPrint('✅ Sensor metrics stored for phase: ${metrics.phase}');
+  }
+
+  /// Save all sensor behavior metrics to database
+  Future<void> saveSensorMetrics() async {
+    if (_currentSessionId == null) {
+      debugPrint('❌ No active session to save sensor metrics');
+      return;
+    }
+
+    if (_sensorMetrics.isEmpty) {
+      debugPrint('⚠️ No sensor metrics to save');
+      return;
+    }
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
+
+      // Save each phase's metrics
+      for (final metrics in _sensorMetrics) {
+        await _dbService.insertSensorBehaviorMetrics(
+          sessionId: _currentSessionId!,
+          userId: user.id,
+          metrics: metrics.toJson(),
+        );
+      }
+
+      debugPrint('✅ All sensor metrics saved to database (${_sensorMetrics.length} phases)');
+      _sensorMetrics.clear(); // Clear after saving
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to save sensor metrics: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+    }
   }
 
   /// Save all cognitive metrics to database (call after all cognitive tests complete)
@@ -122,6 +167,9 @@ class SessionManager {
     }
 
     try {
+      // Save any remaining sensor metrics
+      await saveSensorMetrics();
+      
       await _dbService.updateSessionEndTime(_currentSessionId!);
       debugPrint('✅ Session ended: $_currentSessionId');
       _currentSessionId = null;

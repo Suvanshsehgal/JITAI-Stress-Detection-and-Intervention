@@ -14,7 +14,7 @@ class DatabaseService {
           'user_id': userId,
           'start_time': now.toIso8601String(),
           'test_start_hour': now.hour,
-          'day_of_week': now.weekday,
+          'day_of_week': now.weekday % 7, // Convert Dart's 1(Mon)–7(Sun) to 0(Sun)–6(Sat)
         })
         .select()
         .single();
@@ -232,7 +232,7 @@ class DatabaseService {
           .select()
           .eq('user_id', userId)
           .not('end_time', 'is', null) // ONLY completed tests
-          .order('created_at', ascending: false)
+          .order('start_time', ascending: false) // order by actual test time
           .limit(1);
 
       debugPrint('✅ getLatestSession response: $response');
@@ -247,6 +247,23 @@ class DatabaseService {
     } catch (e, stackTrace) {
       debugPrint('❌ Error fetching latest session: $e');
       debugPrint('❌ Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
+  // Get the latest stress score directly (most recent computed_at)
+  Future<Map<String, dynamic>?> getLatestStressScore(String userId) async {
+    try {
+      final response = await supabase
+          .from('stress_scores')
+          .select('stress_score, stress_label_binary, session_id, computed_at')
+          .eq('user_id', userId)
+          .order('computed_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return response;
+    } catch (e) {
+      debugPrint('❌ Error fetching latest stress score: $e');
       return null;
     }
   }
@@ -321,5 +338,21 @@ class DatabaseService {
       debugPrint('❌ Failed to get user profile data: $e');
       rethrow;
     }
+  }
+
+  // Insert sensor behavior metrics
+  Future<void> insertSensorBehaviorMetrics({
+    required String sessionId,
+    required String userId,
+    required Map<String, dynamic> metrics,
+  }) async {
+    final data = {
+      'session_id': sessionId,
+      'user_id': userId,
+      ...metrics,
+    };
+
+    await supabase.from('sensor_behavior_metrics').insert(data);
+    debugPrint('✅ Sensor behavior metrics saved for phase: ${metrics['phase']}');
   }
 }
