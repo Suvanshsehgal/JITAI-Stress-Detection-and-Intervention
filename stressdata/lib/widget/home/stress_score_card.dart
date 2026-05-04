@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/colors.dart';
 import '../../screens/test_map_screen.dart';
 
 class StressScoreCard extends StatelessWidget {
-  final int score;
+  /// Score as 0–100 integer. Null means no score available yet.
+  final int? score;
+
+  /// 0 = not stressed, 1 = stressed. Null if not available.
+  final int? stressLabel;
 
   const StressScoreCard({
     super.key,
     required this.score,
+    required this.stressLabel,
   });
+
+  String get _statusMessage {
+    if (score == null) return 'No data yet';
+    if (stressLabel == 1) return 'You may be experiencing stress';
+    if (score! >= 70) return 'You are mentally healthy';
+    if (score! >= 40) return 'Moderate stress detected';
+    return 'High stress detected';
+  }
+
+  Color get _progressColor {
+    if (score == null) return Colors.white54;
+    if (stressLabel == 1 || score! < 40) return const Color(0xFFEF5350);
+    if (score! < 70) return const Color(0xFFFFB74D);
+    return Colors.white;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayScore = score ?? 0;
+    final progressValue = displayScore / 100;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(32),
@@ -20,8 +42,8 @@ class StressScoreCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF6B4A35), // Brown shade
-            Color(0xFF4B3425), // Darker brown
+            Color(0xFF6B4A35),
+            Color(0xFF4B3425),
           ],
         ),
         borderRadius: BorderRadius.circular(24),
@@ -35,7 +57,7 @@ class StressScoreCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Circular Progress Indicator
+          // Circular progress
           SizedBox(
             width: 140,
             height: 140,
@@ -46,23 +68,26 @@ class StressScoreCard extends StatelessWidget {
                   width: 140,
                   height: 140,
                   child: CircularProgressIndicator(
-                    value: score / 100,
+                    value: progressValue,
                     strokeWidth: 12,
                     backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(_progressColor),
                   ),
                 ),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$score',
-                      style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+                    score == null
+                        ? const Icon(Icons.hourglass_empty,
+                            color: Colors.white54, size: 40)
+                        : Text(
+                            '$displayScore',
+                            style: const TextStyle(
+                              fontSize: 48,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                     Text(
                       'SCORE',
                       style: TextStyle(
@@ -88,7 +113,7 @@ class StressScoreCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'You are mentally healthy',
+            _statusMessage,
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.8),

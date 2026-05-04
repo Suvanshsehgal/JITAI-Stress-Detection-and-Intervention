@@ -24,6 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   bool _hasCompletedTest = false;
   bool _isLoading = true;
+  double? _latestStressScore;
+  int? _latestStressLabel;
   final DatabaseService _dbService = DatabaseService();
 
   @override
@@ -34,9 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _checkUserTestStatus() async {
     try {
-      // Get current user safely
       final user = Supabase.instance.client.auth.currentUser;
-      
+
       if (user == null) {
         debugPrint('❌ No user logged in');
         setState(() {
@@ -47,19 +48,31 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final userId = user.id;
-      debugPrint('✅ User ID: $userId');
-      
-      // Fetch latest COMPLETED session
+
+      // Check if user has any completed session
       final latestSession = await _dbService.getLatestSession(userId);
-      debugPrint('✅ Fetched session: $latestSession');
-      
-      // Update state
+
+      // Fetch the latest stress score directly (ordered by computed_at)
+      // This avoids the case where a session exists but has no score yet
+      double? stressScore;
+      int? stressLabel;
+      try {
+        final scoreRow = await _dbService.getLatestStressScore(userId);
+        if (scoreRow != null) {
+          stressScore = (scoreRow['stress_score'] as num?)?.toDouble();
+          stressLabel = scoreRow['stress_label_binary'] as int?;
+          debugPrint('✅ Latest stress score: $stressScore, label: $stressLabel');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Could not fetch stress score: $e');
+      }
+
       setState(() {
         _hasCompletedTest = latestSession != null;
+        _latestStressScore = stressScore;
+        _latestStressLabel = stressLabel;
         _isLoading = false;
       });
-
-      debugPrint('✅ Has completed test: $_hasCompletedTest');
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to check user test status: $e');
       debugPrint('❌ Stack trace: $stackTrace');
@@ -98,6 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _HomeContent(
                     hasCompletedTest: _hasCompletedTest,
+                    stressScore: _latestStressScore,
+                    stressLabel: _latestStressLabel,
                     onStartTest: () {
                       Navigator.push(
                         context,
@@ -105,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           builder: (context) => const TestMapScreen(),
                         ),
                       ).then((_) {
-                        // Refresh test status after returning from test
                         debugPrint('🔄 Refreshing test status after test completion');
                         _checkUserTestStatus();
                       });
@@ -134,10 +148,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _HomeContent extends StatelessWidget {
   final bool hasCompletedTest;
+  final double? stressScore;
+  final int? stressLabel;
   final VoidCallback onStartTest;
 
   const _HomeContent({
     required this.hasCompletedTest,
+    required this.stressScore,
+    required this.stressLabel,
     required this.onStartTest,
   });
 
@@ -146,6 +164,11 @@ class _HomeContent extends StatelessWidget {
     if (!hasCompletedTest) {
       return _buildFirstTestScreen(context);
     }
+
+    // Convert 0.0–1.0 score to 0–100 display value
+    final displayScore = stressScore != null
+        ? (stressScore! * 100).round()
+        : null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(
@@ -159,7 +182,10 @@ class _HomeContent extends StatelessWidget {
           const SizedBox(height: 20),
           const GreetingHeader(name: 'Suvansh'),
           const SizedBox(height: 24),
-          const StressScoreCard(score: 88),
+          StressScoreCard(
+            score: displayScore,
+            stressLabel: stressLabel,
+          ),
           const SizedBox(height: 24),
           const MoodSection(
             sleepHours: 0,
