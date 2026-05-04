@@ -4,6 +4,7 @@ import 'dart:async';
 import '../services/ppg_service.dart';
 import '../services/session_manager.dart';
 import '../services/database_service.dart';
+import '../services/sensor_capture_service.dart';
 import '../models/ppg_data.dart';
 import '../widget/custom_button.dart';
 import '../widget/ppg/ppg_waveform_painter.dart';
@@ -12,11 +13,13 @@ import '../core/theme/colors.dart';
 class PpgTestScreen extends StatefulWidget {
   final bool isPre;
   final Function(int bpm) onComplete;
+  final SensorCaptureService sensorService;
 
   const PpgTestScreen({
     super.key,
     required this.isPre,
     required this.onComplete,
+    required this.sensorService,
   });
 
   @override
@@ -36,6 +39,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
   SignalQuality _signalQuality = SignalQuality.noSignal;
   List<double> _waveformData = [];
   String _statusMessage = 'Initializing...';
+  bool _isRecording = false;
   
   // Animation controllers
   late AnimationController _pulseController;
@@ -323,14 +327,49 @@ class _PpgTestScreenState extends State<PpgTestScreen>
     } else if (_currentBPM > 0) {
       bpm = _currentBPM;
     }
-    
-    // Save to database
+
+    // Save PPG data first
     await _saveToDatabase(bpm);
-    
-    widget.onComplete(bpm);
-    if (mounted) {
-      Navigator.pop(context);
+
+    // Post-test PPG: run post_test sensor capture + recovery
+    if (!widget.isPre) {
+      await _runPostTestAndRecovery(bpm);
+    } else {
+      widget.onComplete(bpm);
+      if (mounted) Navigator.pop(context);
     }
+  }
+
+  Future<void> _runPostTestAndRecovery(int bpm) async {
+    if (!mounted) return;
+
+    // post_test — 30s silent sensor capture with recording banner
+    if (mounted) setState(() => _isRecording = true);
+    widget.sensorService.startCapture('post_test');
+    await Future.delayed(const Duration(seconds: 30));
+    final postResult = await widget.sensorService.stopCapture();
+    if (mounted) setState(() => _isRecording = false);
+
+    if (!mounted) return;
+
+    // Save post_test sensor data silently
+    final sessionId = _sessionManager.sessionId;
+    if (sessionId != null) {
+      try {
+        await widget.sensorService.saveToDatabase(
+          result: postResult,
+          sessionId: sessionId,
+          phase: 'post_test',
+          ppgBpm: bpm.toDouble(),
+          hrvEstimate: 50.0, // placeholder
+        );
+      } catch (e) {
+        debugPrint('❌ post_test sensor save error: $e');
+      }
+    }
+
+    widget.onComplete(bpm);
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _saveToDatabase(int bpm) async {
@@ -409,6 +448,9 @@ class _PpgTestScreenState extends State<PpgTestScreen>
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
+                  // Recording banner — shown only during post_test sensor capture
+                  if (_isRecording) _buildRecordingBanner(),
+
                   _buildHeader(),
                   const SizedBox(height: 32),
                   _buildProgressIndicator(),
@@ -729,6 +771,76 @@ class _PpgTestScreenState extends State<PpgTestScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A0A08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _PulsingDot(),
+          const SizedBox(width: 10),
+          const Text(
+            'Recording sensor data...',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Animated pulsing red dot for the recording banner
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: Color(0xFFE53935),
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }

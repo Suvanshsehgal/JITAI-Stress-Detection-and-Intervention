@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math';
 import '../models/speed_answer_model.dart';
 import '../services/session_manager.dart';
+import '../services/sensor_capture_service.dart';
 
 class SpeedAnswerTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
+  final SensorCaptureService sensorService;
 
   const SpeedAnswerTestScreen({
     super.key,
     required this.onComplete,
+    required this.sensorService,
   });
 
   @override
@@ -18,6 +22,9 @@ class SpeedAnswerTestScreen extends StatefulWidget {
 
 class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
     with TickerProviderStateMixin {
+  // 10 randomly selected questions for this session
+  late final List<SpeedQuestion> _questions;
+
   int _currentQuestionIndex = 0;
   final List<SpeedAnswer> _answers = [];
   int _timeLeft = 3;
@@ -34,13 +41,16 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
-  SpeedQuestion get _currentQuestion => speedQuestions[_currentQuestionIndex];
-  bool get _isLastQuestion =>
-      _currentQuestionIndex == speedQuestions.length - 1;
+  SpeedQuestion get _currentQuestion => _questions[_currentQuestionIndex];
+  bool get _isLastQuestion => _currentQuestionIndex == _questions.length - 1;
 
   @override
   void initState() {
     super.initState();
+    // Pick 10 random non-repeating questions from the full pool
+    final pool = List<SpeedQuestion>.from(speedQuestions)..shuffle(Random());
+    _questions = pool.take(10).toList();
+
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -114,6 +124,9 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
   void _handleAnswer(String answer) {
     if (_answered) return;
 
+    final now = DateTime.now();
+    final responseTime = now.difference(_questionStartTime!).inMilliseconds;
+
     setState(() {
       _answered = true;
     });
@@ -121,8 +134,6 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
     _timer?.cancel();
     _progressController.stop();
 
-    final responseTime =
-        DateTime.now().difference(_questionStartTime!).inMilliseconds;
     final isCorrect = answer == _currentQuestion.correctAnswer;
 
     _answers.add(SpeedAnswer(
@@ -224,9 +235,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
   }
 
   Future<void> _completeTest() async {
-    // Save to database
     await _saveToDatabase();
-    
     widget.onComplete(_score);
     if (mounted) {
       Navigator.pop(context);
@@ -568,7 +577,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
               ),
             ),
             Text(
-              'Question ${_currentQuestionIndex + 1}/${speedQuestions.length}',
+              'Question ${_currentQuestionIndex + 1}/${_questions.length}',
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF666666),
@@ -576,30 +585,34 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
             ),
           ],
         ),
-        if (_streak > 1)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2196F3), Color(0xFF42A5F5)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.bolt, color: Colors.white, size: 20),
-                const SizedBox(width: 4),
-                Text(
-                  '${_streak}x',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+        Row(
+          children: [
+            if (_streak > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2196F3), Color(0xFF42A5F5)],
                   ),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ],
-            ),
-          ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bolt, color: Colors.white, size: 20),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_streak}x',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -619,7 +632,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
               ),
             ),
             Text(
-              '${((_currentQuestionIndex + 1) / speedQuestions.length * 100).toInt()}%',
+              '${((_currentQuestionIndex + 1) / _questions.length * 100).toInt()}%',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -630,7 +643,7 @@ class _SpeedAnswerTestScreenState extends State<SpeedAnswerTestScreen>
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: (_currentQuestionIndex + 1) / speedQuestions.length,
+          value: (_currentQuestionIndex + 1) / _questions.length,
           backgroundColor: const Color(0xFFE5D5CC),
           valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2196F3)),
           minHeight: 8,

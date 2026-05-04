@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/test_stage.dart';
 import '../widget/custom_button.dart';
 import '../services/session_manager.dart';
+import '../services/sensor_capture_service.dart';
+import '../services/stress_score_service.dart';
 import 'ppg_test_screen.dart';
 import 'questionnaire_test_screen.dart';
 import 'stroop_test_screen.dart';
@@ -19,7 +23,33 @@ class TestMapScreen extends StatefulWidget {
 class _TestMapScreenState extends State<TestMapScreen> {
   TestProgress _progress = TestProgress.initial();
   final SessionManager _sessionManager = SessionManager();
+  final SensorCaptureService _sensorService = SensorCaptureService();
+
   bool _isInitializing = false;
+  bool _isRecording = false;
+  Timer? _silentCaptureTimer;
+
+  // Part 4: Baseline tracking
+  final List<String> _completedSessionIds = [];
+  bool _isBaselineWeek = true; // default true if not set
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBaselinePrefs();
+  }
+
+  Future<void> _loadBaselinePrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _isBaselineWeek = prefs.getBool('is_baseline_week') ?? true;
+      });
+      debugPrint('📊 Baseline week: $_isBaselineWeek');
+    } catch (e) {
+      debugPrint('❌ Failed to load baseline prefs: $e');
+    }
+  }
 
   final List<Map<String, dynamic>> _testStages = [
     {
@@ -67,27 +97,19 @@ class _TestMapScreenState extends State<TestMapScreen> {
   ];
 
   Future<void> _startTest() async {
-    // Debug: Check auth state
     debugPrint('🔍 Starting test - checking auth state...');
-    debugPrint('🔍 User ID: ${_sessionManager.userId}');
-    debugPrint('🔍 Has active session: ${_sessionManager.hasActiveSession}');
-    
-    // Start session if not already started
+
     if (!_sessionManager.hasActiveSession) {
       setState(() => _isInitializing = true);
-      
       final success = await _sessionManager.startSession();
-      
       setState(() => _isInitializing = false);
-      
+
       if (!success) {
         if (mounted) {
-          // Check if user is logged in
           final userId = _sessionManager.userId;
           final errorMessage = userId == null
               ? 'Please log in to start the test.'
               : 'Failed to start test session. Please check your internet connection and try again.';
-          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMessage),
@@ -97,9 +119,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
                   ? SnackBarAction(
                       label: 'Login',
                       textColor: Colors.white,
-                      onPressed: () {
-                        Navigator.of(context).pop(); // Go back to home
-                      },
+                      onPressed: () => Navigator.of(context).pop(),
                     )
                   : null,
             ),
@@ -108,7 +128,40 @@ class _TestMapScreenState extends State<TestMapScreen> {
         return;
       }
     }
-    
+
+    // Phase 1: pre_test sensor capture — only on first start, not on continuation
+    if (_progress.completedStages.isEmpty) {
+      await _runPreTestCapture();
+    } else {
+      _navigateToStage(_progress.currentStage);
+    }
+  }
+
+  /// Capture pre-test baseline silently in the background (no UI indicator)
+  Future<void> _runPreTestCapture() async {
+    setState(() => _isRecording = true);
+    _sensorService.startCapture('pre_test');
+
+    // Wait 30s silently — user sees the normal test map UI
+    await Future.delayed(const Duration(seconds: 30));
+
+    if (!mounted) return;
+
+    final result = await _sensorService.stopCapture();
+    setState(() => _isRecording = false);
+
+    // Save pre_test sensor data
+    final sessionId = _sessionManager.sessionId;
+    if (sessionId != null) {
+      await _sensorService.saveToDatabase(
+        result: result,
+        sessionId: sessionId,
+        phase: 'pre_test',
+        isBaselineSession: _isBaselineWeek,
+      );
+    }
+
+    if (!mounted) return;
     _navigateToStage(_progress.currentStage);
   }
 
@@ -120,6 +173,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
         screen = PpgTestScreen(
           isPre: true,
           onComplete: (bpm) => _onStageComplete(stage, {'bpm': bpm}),
+          sensorService: _sensorService,
         );
         break;
       case TestStage.questionnairePre:
@@ -132,16 +186,19 @@ class _TestMapScreenState extends State<TestMapScreen> {
       case TestStage.stroopTest:
         screen = StroopTestScreen(
           onComplete: (score) => _onStageComplete(stage, {'score': score}),
+          sensorService: _sensorService,
         );
         break;
       case TestStage.speedAnswerTest:
         screen = SpeedAnswerTestScreen(
           onComplete: (score) => _onStageComplete(stage, {'score': score}),
+          sensorService: _sensorService,
         );
         break;
       case TestStage.patternMemoryTest:
         screen = PatternMemoryTestScreen(
           onComplete: (score) => _onStageComplete(stage, {'score': score}),
+          sensorService: _sensorService,
         );
         break;
       case TestStage.questionnairePost:
@@ -155,6 +212,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
         screen = PpgTestScreen(
           isPre: false,
           onComplete: (bpm) => _onStageComplete(stage, {'bpm': bpm}),
+          sensorService: _sensorService,
         );
         break;
       case TestStage.completed:
@@ -166,6 +224,11 @@ class _TestMapScreenState extends State<TestMapScreen> {
       context,
       MaterialPageRoute(builder: (context) => screen),
     );
+
+    // After any screen pops back, check if we've reached completion
+    if (mounted && _progress.currentStage == TestStage.completed) {
+      _showCompletionDialog();
+    }
   }
 
   void _onStageComplete(TestStage stage, Map<String, dynamic> result) {
@@ -173,31 +236,74 @@ class _TestMapScreenState extends State<TestMapScreen> {
       _progress.completedStages[stage] = true;
       _progress.results[stage.name] = result;
 
-      // Move to next stage
       final currentIndex = TestStage.values.indexOf(stage);
       if (currentIndex < TestStage.values.length - 1) {
         _progress = _progress.copyWith(
           currentStage: TestStage.values[currentIndex + 1],
         );
       } else {
-        _progress = _progress.copyWith(
-          currentStage: TestStage.completed,
-        );
+        _progress = _progress.copyWith(currentStage: TestStage.completed);
       }
     });
 
-    // Auto-navigate to next stage or show completion
+    // Collect session ID when the final stage completes
     if (_progress.currentStage == TestStage.completed) {
-      _showCompletionDialog();
+      final sessionId = _sessionManager.sessionId;
+      if (sessionId != null && !_completedSessionIds.contains(sessionId)) {
+        _completedSessionIds.add(sessionId);
+        debugPrint('📊 Session collected for baseline: $sessionId (total: ${_completedSessionIds.length})');
+      }
+      // Do NOT call _showCompletionDialog here.
+      // The ppgPost screen handles its own sensor save before calling onComplete,
+      // which pops back to TestMapScreen. _navigateToStage then handles completion.
     }
   }
 
   Future<void> _showCompletionDialog() async {
-    // End session
+    // Capture session ID first — endSession will clear it
+    final completedSessionId = _sessionManager.sessionId;
+    debugPrint('📊 Completing session: $completedSessionId');
+
+    // STEP 1: Compute stress score BEFORE ending session
+    // (all data — sensor, cognitive, PPG, WHO-5 — is already saved at this point)
+    if (completedSessionId != null) {
+      try {
+        debugPrint('📊 Computing stress score...');
+        final stressResult =
+            await StressScoreService().computeAndSave(completedSessionId);
+        if (stressResult != null) {
+          debugPrint('✅ Stress score: ${stressResult.stressScore.toStringAsFixed(3)} '
+              '(label: ${stressResult.stressLabelBinary}, '
+              'confidence: ${stressResult.labelConfidence.toStringAsFixed(3)})');
+        } else {
+          debugPrint('⚠️ Stress score returned null');
+        }
+      } catch (e) {
+        debugPrint('❌ Stress score computation failed: $e');
+      }
+    } else {
+      debugPrint('❌ Cannot compute stress score: session ID is null');
+    }
+
+    // STEP 2: End session (marks end_time, clears session ID)
     await _sessionManager.endSession();
-    
+
+    // STEP 3: Baseline trigger — after 5th session during baseline week
+    if (_isBaselineWeek && _completedSessionIds.length >= 5) {
+      try {
+        debugPrint('📊 Triggering baseline computation after 5th session...');
+        await _sensorService.computeAndSaveBaseline(_completedSessionIds);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_baseline_week', false);
+        setState(() => _isBaselineWeek = false);
+        debugPrint('✅ Baseline week complete. Flag set to false.');
+      } catch (e) {
+        debugPrint('❌ Baseline computation failed: $e');
+      }
+    }
+
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -213,10 +319,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
         ),
         content: const Text(
           'You have completed all test stages. Your results have been saved.',
-          style: TextStyle(
-            color: Color(0xFF1A0A08),
-            fontSize: 16,
-          ),
+          style: TextStyle(color: Color(0xFF1A0A08), fontSize: 16),
         ),
         actions: [
           TextButton(
@@ -238,6 +341,12 @@ class _TestMapScreenState extends State<TestMapScreen> {
   }
 
   @override
+  void dispose() {
+    _silentCaptureTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -252,7 +361,9 @@ class _TestMapScreenState extends State<TestMapScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top bar
+                // Recording banner — shown only while sensor capture is active
+                if (_isRecording) _buildRecordingBanner(),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -266,18 +377,14 @@ class _TestMapScreenState extends State<TestMapScreen> {
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.close,
-                        color: Color(0xFF1A0A08),
-                        size: 28,
-                      ),
+                      icon: const Icon(Icons.close,
+                          color: Color(0xFF1A0A08), size: 28),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 24),
 
-                // Progress indicator
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -286,11 +393,8 @@ class _TestMapScreenState extends State<TestMapScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.timeline,
-                        color: Color(0xFF9B2B1A),
-                        size: 32,
-                      ),
+                      const Icon(Icons.timeline,
+                          color: Color(0xFF9B2B1A), size: 32),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -299,9 +403,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
                             const Text(
                               'Progress',
                               style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF666666),
-                              ),
+                                  fontSize: 14, color: Color(0xFF666666)),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -321,14 +423,14 @@ class _TestMapScreenState extends State<TestMapScreen> {
 
                 const SizedBox(height: 24),
 
-                // Test stages map
                 Expanded(
                   child: ListView.builder(
                     itemCount: _testStages.length,
                     itemBuilder: (context, index) {
                       final stageData = _testStages[index];
                       final stage = stageData['stage'] as TestStage;
-                      final isCompleted = _progress.completedStages[stage] ?? false;
+                      final isCompleted =
+                          _progress.completedStages[stage] ?? false;
                       final isCurrent = _progress.currentStage == stage;
                       final isLocked = !isCompleted && !isCurrent;
 
@@ -336,7 +438,6 @@ class _TestMapScreenState extends State<TestMapScreen> {
                         padding: const EdgeInsets.only(bottom: 16.0),
                         child: Row(
                           children: [
-                            // Stage number and connector
                             Column(
                               children: [
                                 Container(
@@ -346,23 +447,19 @@ class _TestMapScreenState extends State<TestMapScreen> {
                                     color: isCompleted
                                         ? const Color(0xFF9B2B1A)
                                         : isCurrent
-                                            ? const Color(0xFF9B2B1A).withValues(alpha: 0.2)
+                                            ? const Color(0xFF9B2B1A)
+                                                .withValues(alpha: 0.2)
                                             : const Color(0xFFE5D5CC),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Center(
                                     child: isCompleted
-                                        ? const Icon(
-                                            Icons.check,
-                                            color: Colors.white,
-                                            size: 24,
-                                          )
+                                        ? const Icon(Icons.check,
+                                            color: Colors.white, size: 24)
                                         : isLocked
-                                            ? const Icon(
-                                                Icons.lock,
+                                            ? const Icon(Icons.lock,
                                                 color: Color(0xFF999999),
-                                                size: 24,
-                                              )
+                                                size: 24)
                                             : Icon(
                                                 stageData['icon'] as IconData,
                                                 color: const Color(0xFF9B2B1A),
@@ -380,10 +477,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
                                   ),
                               ],
                             ),
-
                             const SizedBox(width: 16),
-
-                            // Stage info
                             Expanded(
                               child: Container(
                                 padding: const EdgeInsets.all(16),
@@ -435,20 +529,92 @@ class _TestMapScreenState extends State<TestMapScreen> {
 
                 const SizedBox(height: 20),
 
-                // Start/Continue button
-                _isInitializing
-                    ? const Center(child: CircularProgressIndicator())
-                    : CustomButton(
-                        text: _progress.completedStages.isEmpty
-                            ? 'Start Test'
-                            : _progress.currentStage == TestStage.completed
-                                ? 'View Results'
-                                : 'Continue Test',
-                        onPressed: _startTest,
-                      ),
+                // Bottom area: initializing / start button
+                if (_isInitializing)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  CustomButton(
+                    text: _progress.completedStages.isEmpty
+                        ? 'Start Test'
+                        : _progress.currentStage == TestStage.completed
+                            ? 'View Results'
+                            : 'Continue Test',
+                    onPressed: _startTest,
+                  ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordingBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A0A08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Pulsing red dot
+          _PulsingDot(),
+          const SizedBox(width: 10),
+          const Text(
+            'Recording sensor data...',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Animated pulsing red dot for the recording banner
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: Color(0xFFE53935),
+          shape: BoxShape.circle,
         ),
       ),
     );

@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math';
 import '../models/pattern_memory_model.dart';
 import '../services/session_manager.dart';
+import '../services/sensor_capture_service.dart';
 
 class PatternMemoryTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
+  final SensorCaptureService sensorService;
 
   const PatternMemoryTestScreen({
     super.key,
     required this.onComplete,
+    required this.sensorService,
   });
 
   @override
@@ -19,6 +23,9 @@ class PatternMemoryTestScreen extends StatefulWidget {
 
 class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
     with TickerProviderStateMixin {
+  // 10 randomly selected questions for this session
+  late final List<PatternQuestion> _questions;
+
   int _currentQuestionIndex = 0;
   final List<PatternAnswer> _answers = [];
   bool _showInstructions = true;
@@ -32,14 +39,16 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   late AnimationController _pulseController;
   late AnimationController _fadeController;
 
-  PatternQuestion get _currentQuestion =>
-      patternQuestions[_currentQuestionIndex];
-  bool get _isLastQuestion =>
-      _currentQuestionIndex == patternQuestions.length - 1;
+  PatternQuestion get _currentQuestion => _questions[_currentQuestionIndex];
+  bool get _isLastQuestion => _currentQuestionIndex == _questions.length - 1;
 
   @override
   void initState() {
     super.initState();
+    // Pick 10 random non-repeating questions from the full pool
+    final pool = List<PatternQuestion>.from(patternQuestions)..shuffle(Random());
+    _questions = pool.take(10).toList();
+
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -190,9 +199,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   }
 
   Future<void> _completeTest() async {
-    // Save to database
     await _saveToDatabase();
-    
     widget.onComplete(_score);
     if (mounted) {
       Navigator.pop(context);
@@ -510,7 +517,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
               ),
             ),
             Text(
-              'Level ${_currentQuestionIndex + 1}/${patternQuestions.length}',
+              'Level ${_currentQuestionIndex + 1}/${_questions.length}',
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF666666),
@@ -518,30 +525,34 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
             ),
           ],
         ),
-        if (_streak > 1)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.psychology, color: Colors.white, size: 20),
-                const SizedBox(width: 4),
-                Text(
-                  '${_streak}x',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+        Row(
+          children: [
+            if (_streak > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
                   ),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ],
-            ),
-          ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.psychology, color: Colors.white, size: 20),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_streak}x',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -561,7 +572,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
               ),
             ),
             Text(
-              '${((_currentQuestionIndex + 1) / patternQuestions.length * 100).toInt()}%',
+              '${((_currentQuestionIndex + 1) / _questions.length * 100).toInt()}%',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -572,7 +583,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: (_currentQuestionIndex + 1) / patternQuestions.length,
+          value: (_currentQuestionIndex + 1) / _questions.length,
           backgroundColor: const Color(0xFFE5D5CC),
           valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
           minHeight: 8,

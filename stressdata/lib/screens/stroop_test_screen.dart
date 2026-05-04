@@ -1,15 +1,19 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:async';
 import '../models/stroop_test_model.dart';
 import '../services/session_manager.dart';
+import '../services/sensor_capture_service.dart';
 
 class StroopTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
+  final SensorCaptureService sensorService;
 
   const StroopTestScreen({
     super.key,
     required this.onComplete,
+    required this.sensorService,
   });
 
   @override
@@ -18,6 +22,9 @@ class StroopTestScreen extends StatefulWidget {
 
 class _StroopTestScreenState extends State<StroopTestScreen>
     with TickerProviderStateMixin {
+  // 10 randomly selected questions for this session
+  late final List<StroopQuestion> _questions;
+
   int _currentQuestionIndex = 0;
   final List<StroopAnswer> _answers = [];
   int _timeLeft = 3;
@@ -31,18 +38,20 @@ class _StroopTestScreenState extends State<StroopTestScreen>
   late AnimationController _pulseController;
   late AnimationController _progressController;
 
-  StroopQuestion get _currentQuestion =>
-      stroopQuestions[_currentQuestionIndex];
-  bool get _isLastQuestion => _currentQuestionIndex == stroopQuestions.length - 1;
+  StroopQuestion get _currentQuestion => _questions[_currentQuestionIndex];
+  bool get _isLastQuestion => _currentQuestionIndex == _questions.length - 1;
 
   @override
   void initState() {
     super.initState();
+    // Pick 10 random non-repeating questions from the full pool
+    final pool = List<StroopQuestion>.from(stroopQuestions)..shuffle(Random());
+    _questions = pool.take(10).toList();
+
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     )..repeat(reverse: true);
-
     _progressController = AnimationController(
       duration: const Duration(seconds: 3),
       vsync: this,
@@ -50,9 +59,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
   }
 
   void _startTest() {
-    setState(() {
-      _showInstructions = false;
-    });
+    setState(() => _showInstructions = false);
     _startQuestion();
   }
 
@@ -62,16 +69,12 @@ class _StroopTestScreenState extends State<StroopTestScreen>
       _answered = false;
       _questionStartTime = DateTime.now();
     });
-
     _progressController.reset();
     _progressController.forward();
-
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeLeft > 0) {
-        setState(() {
-          _timeLeft--;
-        });
+        setState(() => _timeLeft--);
       } else {
         _handleTimeout();
       }
@@ -82,32 +85,28 @@ class _StroopTestScreenState extends State<StroopTestScreen>
     if (_answered) return;
     _timer?.cancel();
     _progressController.stop();
-
-    final responseTime = DateTime.now().difference(_questionStartTime!).inMilliseconds;
+    final responseTime =
+        DateTime.now().difference(_questionStartTime!).inMilliseconds;
     _answers.add(StroopAnswer(
       questionId: _currentQuestion.id,
       selectedAnswer: '',
       isCorrect: false,
       responseTime: responseTime,
     ));
-
     _streak = 0;
     _showFeedback(false, true);
   }
 
   void _handleAnswer(String answer) {
     if (_answered) return;
+    final now = DateTime.now();
+    final responseTime = now.difference(_questionStartTime!).inMilliseconds;
 
-    setState(() {
-      _answered = true;
-    });
-
+    setState(() => _answered = true);
     _timer?.cancel();
     _progressController.stop();
 
-    final responseTime = DateTime.now().difference(_questionStartTime!).inMilliseconds;
     final isCorrect = answer == _currentQuestion.correctAnswer;
-
     _answers.add(StroopAnswer(
       questionId: _currentQuestion.id,
       selectedAnswer: answer,
@@ -117,15 +116,12 @@ class _StroopTestScreenState extends State<StroopTestScreen>
 
     if (isCorrect) {
       _streak++;
-      final timeBonus = (_timeLeft * 2);
+      final timeBonus = _timeLeft * 2;
       final streakBonus = (_streak > 1) ? (_streak * 5) : 0;
-      setState(() {
-        _score += 10 + timeBonus + streakBonus;
-      });
+      setState(() => _score += 10 + timeBonus + streakBonus);
     } else {
       _streak = 0;
     }
-
     _showFeedback(isCorrect, false);
   }
 
@@ -160,42 +156,35 @@ class _StroopTestScreenState extends State<StroopTestScreen>
               const SizedBox(height: 16),
               Text(
                 timeout
-                    ? 'Time\'s Up!'
+                    ? "Time's Up!"
                     : isCorrect
                         ? 'Correct!'
                         : 'Wrong!',
                 style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A0A08),
-                ),
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A0A08)),
               ),
               if (_streak > 1 && isCorrect) ...[
                 const SizedBox(height: 8),
-                Text(
-                  '🔥 ${_streak}x Streak!',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF9B2B1A),
-                  ),
-                ),
+                Text('🔥 ${_streak}x Streak!',
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF9B2B1A))),
               ],
             ],
           ),
         ),
       ),
     );
-
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) {
         Navigator.of(context).pop();
         if (_isLastQuestion) {
           _completeTest();
         } else {
-          setState(() {
-            _currentQuestionIndex++;
-          });
+          setState(() => _currentQuestionIndex++);
           _startQuestion();
         }
       }
@@ -203,49 +192,26 @@ class _StroopTestScreenState extends State<StroopTestScreen>
   }
 
   Future<void> _completeTest() async {
-    // Save to database
-    await _saveToDatabase();
-    
+    await _saveCognitiveMetrics();
     widget.onComplete(_score);
-    if (mounted) {
-      Navigator.pop(context);
-    }
+    if (mounted) Navigator.pop(context);
   }
 
-  Future<void> _saveToDatabase() async {
+  Future<void> _saveCognitiveMetrics() async {
     try {
-      // Calculate metrics
       final correctAnswers = _answers.where((a) => a.isCorrect).length;
       final totalQuestions = _answers.length;
-      final totalResponseTime = _answers.fold<int>(
-        0,
-        (sum, answer) => sum + answer.responseTime,
-      );
+      final totalResponseTime =
+          _answers.fold<int>(0, (sum, a) => sum + a.responseTime);
       final averageResponseTime = totalResponseTime / totalQuestions;
       final accuracy = correctAnswers / totalQuestions;
-      
-      // Calculate interference score (simplified: ratio of errors on incongruent vs congruent trials)
-      // For now, using a basic calculation - can be enhanced later
-      final interferenceScore = 1.0 - accuracy;
-
-      // Store metrics in SessionManager (will be saved after all cognitive tests)
       _sessionManager.storeStroopMetrics(
         accuracy: accuracy,
         avgResponseTime: averageResponseTime,
-        interferenceScore: interferenceScore,
+        interferenceScore: 1.0 - accuracy,
       );
-
-      debugPrint('✅ Stroop Test metrics stored in SessionManager');
     } catch (e) {
-      debugPrint('❌ Failed to store Stroop Test metrics: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to store test metrics: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      debugPrint('❌ Failed to store Stroop metrics: $e');
     }
   }
 
@@ -259,10 +225,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_showInstructions) {
-      return _buildInstructions();
-    }
-
+    if (_showInstructions) return _buildInstructions();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -310,21 +273,15 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Stroop Test',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A0A08),
-                      ),
-                    ),
+                    const Text('Stroop Test',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A0A08))),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.close,
-                        color: Color(0xFF1A0A08),
-                        size: 28,
-                      ),
+                      icon: const Icon(Icons.close,
+                          color: Color(0xFF1A0A08), size: 28),
                     ),
                   ],
                 ),
@@ -337,87 +294,60 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                           ScaleTransition(
                             scale: Tween<double>(begin: 0.8, end: 1.0).animate(
                               CurvedAnimation(
-                                parent: _pulseController,
-                                curve: Curves.easeInOut,
-                              ),
+                                  parent: _pulseController,
+                                  curve: Curves.easeInOut),
                             ),
                             child: Container(
                               padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF9B2B1A),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.psychology,
-                                size: 64,
-                                color: Colors.white,
-                              ),
+                              decoration: const BoxDecoration(
+                                  color: Color(0xFF9B2B1A),
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.psychology,
+                                  size: 64, color: Colors.white),
                             ),
                           ),
                           const SizedBox(height: 32),
-                          const Text(
-                            'How to Play',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A0A08),
-                            ),
-                          ),
+                          const Text('How to Play',
+                              style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A0A08))),
                           const SizedBox(height: 24),
-                          _buildInstructionCard(
-                            '1',
-                            'Read the COLOR',
-                            'Not the word itself!',
-                            Icons.palette,
-                          ),
+                          _buildInstructionCard('1', 'Read the COLOR',
+                              'Not the word itself!', Icons.palette),
+                          const SizedBox(height: 16),
+                          _buildInstructionCard('2', 'Answer Quickly',
+                              'You have 3 seconds per question', Icons.timer),
                           const SizedBox(height: 16),
                           _buildInstructionCard(
-                            '2',
-                            'Answer Quickly',
-                            'You have 3 seconds per question',
-                            Icons.timer,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildInstructionCard(
-                            '3',
-                            'Build Streaks',
-                            'Consecutive correct answers = bonus points!',
-                            Icons.local_fire_department,
-                          ),
+                              '3',
+                              'Build Streaks',
+                              'Consecutive correct answers = bonus points!',
+                              Icons.local_fire_department),
                           const SizedBox(height: 32),
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Column(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16)),
+                            child: const Column(
                               children: [
-                                const Text(
-                                  'Example:',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1A0A08),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'RED',
-                                  style: TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Answer: Blue ✓',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Color(0xFF666666),
-                                  ),
-                                ),
+                                Text('Example:',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1A0A08))),
+                                SizedBox(height: 12),
+                                Text('RED',
+                                    style: TextStyle(
+                                        fontSize: 48,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue)),
+                                SizedBox(height: 12),
+                                Text('Answer: Blue ✓',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF666666))),
                               ],
                             ),
                           ),
@@ -436,17 +366,12 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                       backgroundColor: const Color(0xFF9B2B1A),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                          borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'Start Test',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: const Text('Start Test',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -462,9 +387,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+          color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
           Container(
@@ -475,14 +398,11 @@ class _StroopTestScreenState extends State<StroopTestScreen>
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: Text(
-                number,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF9B2B1A),
-                ),
-              ),
+              child: Text(number,
+                  style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF9B2B1A))),
             ),
           ),
           const SizedBox(width: 16),
@@ -490,30 +410,19 @@ class _StroopTestScreenState extends State<StroopTestScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A0A08),
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A0A08))),
                 const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                  ),
-                ),
+                Text(subtitle,
+                    style: const TextStyle(
+                        fontSize: 14, color: Color(0xFF666666))),
               ],
             ),
           ),
-          Icon(
-            icon,
-            color: const Color(0xFF9B2B1A),
-            size: 28,
-          ),
+          Icon(icon, color: const Color(0xFF9B2B1A), size: 28),
         ],
       ),
     );
@@ -526,48 +435,43 @@ class _StroopTestScreenState extends State<StroopTestScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Stroop Test',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A0A08),
-              ),
-            ),
+            const Text('Stroop Test',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A0A08))),
             Text(
-              'Question ${_currentQuestionIndex + 1}/${stroopQuestions.length}',
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF666666),
-              ),
-            ),
+                'Question ${_currentQuestionIndex + 1}/${_questions.length}',
+                style: const TextStyle(
+                    fontSize: 14, color: Color(0xFF666666))),
           ],
         ),
-        if (_streak > 1)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.local_fire_department,
-                    color: Colors.white, size: 20),
-                const SizedBox(width: 4),
-                Text(
-                  '${_streak}x',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+        Row(
+          children: [
+            if (_streak > 1)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)]),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ],
-            ),
-          ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.local_fire_department,
+                        color: Colors.white, size: 20),
+                    const SizedBox(width: 4),
+                    Text('${_streak}x',
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -578,29 +482,25 @@ class _StroopTestScreenState extends State<StroopTestScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Progress',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
-              ),
-            ),
+            const Text('Progress',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF666666))),
             Text(
-              '${((_currentQuestionIndex + 1) / stroopQuestions.length * 100).toInt()}%',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF9B2B1A),
-              ),
-            ),
+                '${((_currentQuestionIndex + 1) / _questions.length * 100).toInt()}%',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF9B2B1A))),
           ],
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: (_currentQuestionIndex + 1) / stroopQuestions.length,
+          value: (_currentQuestionIndex + 1) / _questions.length,
           backgroundColor: const Color(0xFFE5D5CC),
-          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF9B2B1A)),
+          valueColor:
+              const AlwaysStoppedAnimation<Color>(Color(0xFF9B2B1A)),
           minHeight: 8,
           borderRadius: BorderRadius.circular(4),
         ),
@@ -625,28 +525,24 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                     strokeWidth: 8,
                     backgroundColor: const Color(0xFFE5D5CC),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _timeLeft <= 1 ? Colors.red : const Color(0xFF9B2B1A),
+                      _timeLeft <= 1
+                          ? Colors.red
+                          : const Color(0xFF9B2B1A),
                     ),
                   ),
                 ),
-                Text(
-                  '$_timeLeft',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: _timeLeft <= 1 ? Colors.red : const Color(0xFF1A0A08),
-                  ),
-                ),
+                Text('$_timeLeft',
+                    style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: _timeLeft <= 1
+                            ? Colors.red
+                            : const Color(0xFF1A0A08))),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'seconds left',
-              style: TextStyle(
-                fontSize: 12,
-                color: const Color(0xFF666666),
-              ),
-            ),
+            const Text('seconds left',
+                style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
           ],
         );
       },
@@ -661,22 +557,18 @@ class _StroopTestScreenState extends State<StroopTestScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 4))
         ],
       ),
       child: Column(
         children: [
-          const Text(
-            'What COLOR is this word?',
-            style: TextStyle(
-              fontSize: 13,
-              color: Color(0xFF666666),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          const Text('What COLOR is this word?',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF666666),
+                  fontWeight: FontWeight.w500)),
           const SizedBox(height: 16),
           Text(
             _currentQuestion.word,
@@ -717,7 +609,6 @@ class _StroopTestScreenState extends State<StroopTestScreen>
           default:
             optionColor = const Color(0xFF9B2B1A);
         }
-
         return InkWell(
           onTap: _answered ? null : () => _handleAnswer(option),
           borderRadius: BorderRadius.circular(16),
@@ -727,9 +618,7 @@ class _StroopTestScreenState extends State<StroopTestScreen>
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: optionColor.withValues(alpha: 0.3),
-                width: 2,
-              ),
+                  color: optionColor.withValues(alpha: 0.3), width: 2),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -738,19 +627,14 @@ class _StroopTestScreenState extends State<StroopTestScreen>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: optionColor,
-                    shape: BoxShape.circle,
-                  ),
+                      color: optionColor, shape: BoxShape.circle),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  option,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A0A08),
-                  ),
-                ),
+                Text(option,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A0A08))),
               ],
             ),
           ),
@@ -769,28 +653,18 @@ class _StroopTestScreenState extends State<StroopTestScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.stars,
-            color: Color(0xFF9B2B1A),
-            size: 24,
-          ),
+          const Icon(Icons.stars, color: Color(0xFF9B2B1A), size: 24),
           const SizedBox(width: 8),
-          const Text(
-            'Score: ',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A0A08),
-            ),
-          ),
-          Text(
-            '$_score',
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF9B2B1A),
-            ),
-          ),
+          const Text('Score: ',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A0A08))),
+          Text('$_score',
+              style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF9B2B1A))),
         ],
       ),
     );
