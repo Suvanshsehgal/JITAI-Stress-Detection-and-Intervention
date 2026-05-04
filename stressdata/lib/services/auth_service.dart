@@ -4,12 +4,32 @@ import '../config/supabase_config.dart';
 class AuthService {
   final supabase = SupabaseConfig.client;
 
-  // Sign up with email and password
+  // Sign up with email, password, and display name
+  Future<AuthResponse> signUpWithName(
+      String email, String password, String name) async {
+    return await supabase.auth.signUp(
+      email: email,
+      password: password,
+      data: {'full_name': name},
+    );
+  }
+
+  // Sign up with email and password (kept for backward compatibility)
   Future<AuthResponse> signUp(String email, String password) async {
     return await supabase.auth.signUp(
       email: email,
       password: password,
     );
+  }
+
+  // Get display name from user metadata
+  String get userName {
+    final meta = supabase.auth.currentUser?.userMetadata;
+    final name = meta?['full_name'] as String?;
+    if (name != null && name.trim().isNotEmpty) return name.trim();
+    // Fallback: derive from email
+    final email = supabase.auth.currentUser?.email ?? '';
+    return email.isNotEmpty ? email.split('@').first.capitalize() : 'User';
   }
 
   // Sign in with email and password
@@ -58,4 +78,9 @@ class AuthService {
       UserAttributes(email: newEmail),
     );
   }
+}
+
+extension _StringExt on String {
+  String capitalize() =>
+      isEmpty ? this : this[0].toUpperCase() + substring(1);
 }

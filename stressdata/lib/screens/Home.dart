@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme/colors.dart';
 import '../widget/home/greeting_header.dart';
 import '../widget/home/stress_score_card.dart';
 import '../widget/home/mood_section.dart';
-import '../widget/home/weekly_insights_card.dart';
 import '../widget/home/recommendation_card.dart';
+import '../widget/home/weekly_insights_card.dart';
 import '../widget/bottom_nav_bar.dart';
 import '../services/database_service.dart';
+import '../services/step_service.dart';
+import '../services/auth_service.dart';
 import 'test_screen.dart';
 import 'profile_screen.dart';
 import 'test_map_screen.dart';
@@ -26,12 +29,130 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   double? _latestStressScore;
   int? _latestStressLabel;
+  double _sleepHours = 0;
+  String _userName = '';
   final DatabaseService _dbService = DatabaseService();
+  final StepService _stepService = StepService();
+  final AuthService _authService = AuthService();
+
+  static const _keySleep = 'sleep_hours';
+  static const _keySleepDate = 'sleep_date';
 
   @override
   void initState() {
     super.initState();
     _checkUserTestStatus();
+    _stepService.start();
+    _loadSleep();
+    _userName = _authService.userName;
+  }
+
+  @override
+  void dispose() {
+    _stepService.stop();
+    super.dispose();
+  }
+
+  Future<void> _loadSleep() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = _todayKey();
+    final savedDate = prefs.getString(_keySleepDate);
+    if (savedDate == today) {
+      setState(() => _sleepHours = prefs.getDouble(_keySleep) ?? 0);
+    }
+  }
+
+  Future<void> _saveSleep(double hours) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keySleep, hours);
+    await prefs.setString(_keySleepDate, _todayKey());
+    setState(() => _sleepHours = hours);
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  void _showSleepInput(BuildContext context) {
+    double selected = _sleepHours > 0 ? _sleepHours : 7;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5EDE8),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4B3425).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'How many hours did you sleep?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A0A08),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '${selected.toStringAsFixed(1)} hrs',
+                style: const TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4B3425),
+                ),
+              ),
+              Slider(
+                value: selected,
+                min: 0,
+                max: 12,
+                divisions: 24,
+                activeColor: const Color(0xFF4B3425),
+                inactiveColor: const Color(0xFF4B3425).withValues(alpha: 0.2),
+                onChanged: (v) => setModalState(() => selected = v),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _saveSleep(selected);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4B3425),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _checkUserTestStatus() async {
@@ -113,6 +234,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     hasCompletedTest: _hasCompletedTest,
                     stressScore: _latestStressScore,
                     stressLabel: _latestStressLabel,
+                    sleepHours: _sleepHours,
+                    stepService: _stepService,
+                    userName: _userName,
+                    onSleepTap: () => _showSleepInput(context),
                     onStartTest: () {
                       Navigator.push(
                         context,
@@ -150,12 +275,20 @@ class _HomeContent extends StatelessWidget {
   final bool hasCompletedTest;
   final double? stressScore;
   final int? stressLabel;
+  final double sleepHours;
+  final StepService stepService;
+  final String userName;
+  final VoidCallback onSleepTap;
   final VoidCallback onStartTest;
 
   const _HomeContent({
     required this.hasCompletedTest,
     required this.stressScore,
     required this.stressLabel,
+    required this.sleepHours,
+    required this.stepService,
+    required this.userName,
+    required this.onSleepTap,
     required this.onStartTest,
   });
 
@@ -180,21 +313,32 @@ class _HomeContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 20),
-          const GreetingHeader(name: 'Suvansh'),
+          GreetingHeader(name: userName),
           const SizedBox(height: 24),
           StressScoreCard(
             score: displayScore,
             stressLabel: stressLabel,
           ),
           const SizedBox(height: 24),
-          const MoodSection(
-            sleepHours: 0,
-            steps: 0,
+          ValueListenableBuilder<int>(
+            valueListenable: stepService.todaySteps,
+            builder: (context, steps, _) {
+              return MoodSection(
+                sleepHours: sleepHours,
+                steps: steps / 1000,
+                onSleepTap: onSleepTap,
+                stressScore: displayScore,
+                stressLabel: stressLabel,
+              );
+            },
           ),
           const SizedBox(height: 24),
           const WeeklyInsightsCard(),
           const SizedBox(height: 24),
-          const RecommendationCard(),
+          RecommendationCard(
+            stressScore: displayScore,
+            stressLabel: stressLabel,
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -212,7 +356,7 @@ class _HomeContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 20),
-          const GreetingHeader(name: 'Suvansh'),
+          GreetingHeader(name: userName),
           const SizedBox(height: 40),
 
           // Welcome Message

@@ -13,6 +13,7 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -21,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -28,11 +30,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       _showError('Please fill all fields');
       return;
     }
@@ -50,7 +53,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _authService.signUp(email, password);
+      final response = await _authService.signUpWithName(email, password, name);
       
       if (response.user != null) {
         if (mounted) {
@@ -201,6 +204,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
 
                       const SizedBox(height: 20),
+
+                      // Name Field
+                      TextField(
+                        controller: _nameController,
+                        keyboardType: TextInputType.name,
+                        textCapitalization: TextCapitalization.words,
+                        enabled: !_isLoading,
+                        decoration: InputDecoration(
+                          hintText: 'Full Name',
+                          hintStyle: TextStyle(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                          ),
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
 
                       // Email Field
                       TextField(

@@ -31,7 +31,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final email = user.email ?? '';
     _email = email;
-    _userName = email.isNotEmpty ? email.split('@').first.capitalize() : 'User';
+
+    // Prefer full_name from auth metadata, fall back to email prefix
+    final meta = user.userMetadata;
+    final metaName = meta?['full_name'] as String?;
+    _userName = (metaName != null && metaName.trim().isNotEmpty)
+        ? metaName.trim()
+        : (email.isNotEmpty ? email.split('@').first.capitalize() : 'User');
 
     try {
       // Fetch all completed sessions, newest first
