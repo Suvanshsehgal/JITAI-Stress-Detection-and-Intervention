@@ -61,9 +61,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           // Navigate to login or home after a delay
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
-              Navigator.pushReplacement(
+              Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const HomeScreen()),
+                (route) => false,
               );
             }
           });

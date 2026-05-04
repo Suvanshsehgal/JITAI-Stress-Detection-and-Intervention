@@ -45,8 +45,6 @@ class OnboardingScreen extends StatelessWidget {
               flex: 6,
               child: Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: const BorderRadius.vertical(
@@ -54,82 +52,85 @@ class OnboardingScreen extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       offset: const Offset(0, -4),
                     ),
                   ],
                 ),
-                child: Column(
-                  children: [
-                    // Indicator
-                    Container(
-                      width: 60,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                  child: Column(
+                    children: [
+                      // Indicator
+                      Container(
+                        width: 60,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    // Title
-                    Text(
-                      'Built With You, For You',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                      // Title
+                      Text(
+                        'Built With You, For You',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Description
-                    Text(
-                      'We\'re building a JIT-AI based stress detection system to better understand and manage daily stress. Your participation helps us improve by getting accurate data about your own stress patterns.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.primary.withOpacity(0.6),
-                        height: 1.6,
+                      // Description
+                      Text(
+                        'We\'re building a JIT-AI based stress detection system to better understand and manage daily stress. Your participation helps us improve by getting accurate data about your own stress patterns.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.primary.withValues(alpha: 0.6),
+                          height: 1.6,
+                        ),
                       ),
-                    ),
 
-                    const Spacer(),
+                      const SizedBox(height: 40),
 
-                    // Create Account
-                    CustomButton(
-                      text: 'Create an Account',
-                      isPrimary: true,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                      // Create Account
+                      CustomButton(
+                        text: 'Create an Account',
+                        isPrimary: true,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const RegisterScreen(),
+                            ),
+                          );
+                        },
+                      ),
 
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Login
-                    CustomButton(
-                      text: 'Login',
-                      isPrimary: false,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                      // Login
+                      CustomButton(
+                        text: 'Login',
+                        isPrimary: false,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

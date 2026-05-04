@@ -122,6 +122,7 @@ class _MoodItem extends StatelessWidget {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (emoji != null)
             Text(emoji!, style: const TextStyle(fontSize: 32))
@@ -129,14 +130,18 @@ class _MoodItem extends StatelessWidget {
             Icon(icon, size: 32, color: AppColors.primary),
           const SizedBox(height: 8),
           if (value != null)
-            Text(
-              value!,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+            Flexible(
+              child: Text(
+                value!,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
             ),
           const SizedBox(height: 4),
           Text(
@@ -148,6 +153,8 @@ class _MoodItem extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.6),
               letterSpacing: 0.5,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

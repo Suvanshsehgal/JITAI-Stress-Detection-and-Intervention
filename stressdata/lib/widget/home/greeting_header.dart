@@ -18,6 +18,8 @@ class GreetingHeader extends StatelessWidget {
         fontWeight: FontWeight.bold,
         color: AppColors.primary,
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
