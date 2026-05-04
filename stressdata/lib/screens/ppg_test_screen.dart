@@ -5,6 +5,7 @@ import '../services/ppg_service.dart';
 import '../services/session_manager.dart';
 import '../services/database_service.dart';
 import '../services/sensor_capture_service.dart';
+import '../config/supabase_config.dart';
 import '../models/ppg_data.dart';
 import '../widget/custom_button.dart';
 import '../widget/ppg/ppg_waveform_painter.dart';
@@ -381,11 +382,14 @@ class _PpgTestScreenState extends State<PpgTestScreen>
         throw Exception('No active session or user');
       }
 
-      // For now, we'll use simplified metrics
-      // In production, you'd calculate actual HRV from the PPG signal
+      // Get PPG result with quality metrics
+      final result = _ppgService.getResult();
       final heartRate = bpm.toDouble();
-      final hrv = 50.0; // Placeholder - calculate from signal in production
+      final hrv = result?.hrv?.rmssd ?? 50.0; // Use actual HRV if available
       final stressIndex = _calculateStressIndex(bpm);
+      
+      // Calculate signal quality score (0.0 - 1.0)
+      final signalQuality = _confidence / 100.0; // Convert confidence percentage to 0-1 scale
 
       await _dbService.insertPPGResults(
         sessionId: sessionId,
@@ -395,7 +399,15 @@ class _PpgTestScreenState extends State<PpgTestScreen>
         stressIndex: stressIndex,
       );
 
+      // CRITICAL: Save PPG signal quality to physiological_metrics
+      // This is required for stress score calculation
+      await SupabaseConfig.client
+          .from('physiological_metrics')
+          .update({'ppg_signal_quality': signalQuality})
+          .eq('session_id', sessionId);
+
       debugPrint('✅ PPG data saved successfully (isPre: ${widget.isPre})');
+      debugPrint('   BPM: $bpm, HRV: $hrv, Quality: ${signalQuality.toStringAsFixed(2)}');
     } catch (e) {
       debugPrint('❌ Failed to save PPG data: $e');
       if (mounted) {
