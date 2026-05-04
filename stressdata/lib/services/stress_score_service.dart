@@ -206,8 +206,11 @@ class StressScoreService {
     required String sessionId,
     required StressScoreResult result,
   }) async {
+    final userId = _supabase.auth.currentUser?.id;
+
     final data = {
       'session_id': sessionId,
+      if (userId != null) 'user_id': userId,
       'stress_score': result.stressScore,
       'stress_label_binary': result.stressLabelBinary,
       'label_confidence': result.labelConfidence,
