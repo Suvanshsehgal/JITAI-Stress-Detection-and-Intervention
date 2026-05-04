@@ -58,29 +58,45 @@ class StressScoreService {
 
   // ─── STEP 1: Fetch all data ───────────────────────────────────────────────
   Future<Map<String, dynamic>> _fetchSessionData(String sessionId) async {
+    debugPrint('📊 Fetching session data for: $sessionId');
+    
     final results = await Future.wait([
+      // WHO-5: Should be unique per session, but add safety
       _supabase
           .from('who5_responses')
           .select('normalized_score')
           .eq('session_id', sessionId)
+          .order('created_at', ascending: false)
+          .limit(1)
           .maybeSingle(),
+      // Physiological: Should be unique per session, but add safety
       _supabase
           .from('physiological_metrics')
           .select('heart_rate_avg, rmssd, ppg_signal_quality')
           .eq('session_id', sessionId)
+          .order('created_at', ascending: false)
+          .limit(1)
           .maybeSingle(),
+      // Cognitive: Should be unique per session, but add safety
       _supabase
           .from('cognitive_metrics')
           .select(
               'stroop_interference_score, stroop_avg_response_time, stroop_accuracy, commission_errors, omission_errors')
           .eq('session_id', sessionId)
+          .order('created_at', ascending: false)
+          .limit(1)
           .maybeSingle(),
+      // Sensor behavior: Handle multiple records by taking the most recent one
+      // NOTE: This table uses 'captured_at' instead of 'created_at'
       _supabase
           .from('sensor_behavior_metrics')
           .select('restlessness_score, baseline_deviation, self_reported_stress, data_quality')
           .eq('session_id', sessionId)
           .eq('phase', 'pre_test')
+          .order('captured_at', ascending: false)
+          .limit(1)
           .maybeSingle(),
+      // User baselines: Take most recent baseline
       _supabase
           .from('user_baselines')
           .select('baseline_ppg_bpm, baseline_hrv')
@@ -89,6 +105,24 @@ class StressScoreService {
           .limit(1)
           .maybeSingle(),
     ]);
+
+    // Debug logging
+    debugPrint('📊 WHO-5 data: ${results[0] != null ? "✓" : "✗"}');
+    debugPrint('📊 Physiological data: ${results[1] != null ? "✓" : "✗"}');
+    if (results[1] != null) {
+      final physio = results[1] as Map<String, dynamic>;
+      debugPrint('   - HR: ${physio['heart_rate_avg']}');
+      debugPrint('   - HRV: ${physio['rmssd']}');
+      debugPrint('   - Quality: ${physio['ppg_signal_quality']}');
+    }
+    debugPrint('📊 Cognitive data: ${results[2] != null ? "✓" : "✗"}');
+    if (results[2] != null) {
+      final cognitive = results[2] as Map<String, dynamic>;
+      debugPrint('   - Stroop accuracy: ${cognitive['stroop_accuracy']}');
+      debugPrint('   - Stroop RT: ${cognitive['stroop_avg_response_time']}');
+    }
+    debugPrint('📊 Sensor behavior data: ${results[3] != null ? "✓" : "✗"}');
+    debugPrint('📊 Baseline data: ${results[4] != null ? "✓" : "✗"}');
 
     return {
       'who5': results[0],
@@ -206,29 +240,71 @@ class StressScoreService {
     required String sessionId,
     required StressScoreResult result,
   }) async {
-    final userId = _supabase.auth.currentUser?.id;
+    try {
+      final userId = _supabase.auth.currentUser?.id;
 
-    final data = {
-      'session_id': sessionId,
-      if (userId != null) 'user_id': userId,
-      'stress_score': result.stressScore,
-      'stress_label_binary': result.stressLabelBinary,
-      'label_confidence': result.labelConfidence,
-      'label_source': 'composite',
-      'who5_stress': result.who5Stress,
-      'hrv_stress': result.hrvStress,
-      'hr_stress': result.hrStress,
-      'cognitive_stress': result.cognitiveStress,
-      'behavior_stress': result.behaviorStress,
-      'self_report_stress': result.selfReportStress,
-      'baseline_stress': result.baselineStress,
-    };
+      if (userId == null) {
+        debugPrint('❌ Cannot save stress score: user not authenticated');
+        throw Exception('User not authenticated');
+      }
 
-    await _supabase
-        .from('stress_scores')
-        .upsert(data, onConflict: 'session_id');
+      // IMPORTANT: Let the database set user_id via auth.uid() default
+      // This ensures RLS policy checks pass correctly
+      final data = {
+        'session_id': sessionId,
+        // DO NOT set user_id explicitly - let database default handle it
+        'stress_score': result.stressScore,
+        'stress_label_binary': result.stressLabelBinary,
+        'label_confidence': result.labelConfidence,
+        'label_source': 'composite',
+        'who5_stress': result.who5Stress,
+        'hrv_stress': result.hrvStress,
+        'hr_stress': result.hrStress,
+        'cognitive_stress': result.cognitiveStress,
+        'behavior_stress': result.behaviorStress,
+        'self_report_stress': result.selfReportStress,
+        'baseline_stress': result.baselineStress,
+      };
 
-    debugPrint('✅ Stress score saved: $result');
+      debugPrint('💾 Attempting to save stress score to database...');
+      debugPrint('💾 Session ID: $sessionId');
+      debugPrint('💾 User ID (from auth): $userId');
+      debugPrint('💾 Data: $data');
+
+      // Verify session exists and belongs to current user
+      final sessionCheck = await _supabase
+          .from('test_sessions')
+          .select('id, user_id')
+          .eq('id', sessionId)
+          .maybeSingle();
+
+      if (sessionCheck == null) {
+        debugPrint('❌ Session not found in database: $sessionId');
+        throw Exception('Session not found: $sessionId');
+      }
+
+      final sessionUserId = sessionCheck['user_id'] as String;
+      if (sessionUserId != userId) {
+        debugPrint('❌ Session user_id mismatch: session=$sessionUserId, auth=$userId');
+        throw Exception('Session does not belong to current user');
+      }
+
+      debugPrint('✅ Session verified: $sessionId (user: $sessionUserId)');
+
+      // Perform upsert - use session_id as conflict target
+      final response = await _supabase
+          .from('stress_scores')
+          .upsert(data, onConflict: 'session_id')
+          .select();
+
+      debugPrint('✅ Stress score saved successfully: $response');
+      debugPrint('✅ Stress score: $result');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to save stress score to database');
+      debugPrint('❌ Error: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow; // Re-throw so caller knows it failed
+    }
   }
 
   // ─── PUBLIC: Compute and save ─────────────────────────────────────────────
@@ -256,6 +332,16 @@ class StressScoreService {
       final behaviorStress = _computeBehaviorStress(sensor);
       final baselineStress = _computeBaselineStress(physio, baseline);
 
+      // Debug component scores
+      debugPrint('📊 Component Scores:');
+      debugPrint('   WHO-5 Stress: ${who5Stress.toStringAsFixed(3)} (weight: 30%)');
+      debugPrint('   HRV Stress: ${hrvStress.toStringAsFixed(3)} (weight: 20%)');
+      debugPrint('   HR Stress: ${hrStress.toStringAsFixed(3)} (weight: 10%)');
+      debugPrint('   Cognitive Stress: ${cognitiveStress.toStringAsFixed(3)} (weight: 15%)');
+      debugPrint('   Behavior Stress: ${behaviorStress.toStringAsFixed(3)} (weight: 10%)');
+      debugPrint('   Self-Report Stress: ${selfReportStress.toStringAsFixed(3)} (weight: 10%)');
+      debugPrint('   Baseline Stress: ${baselineStress.toStringAsFixed(3)} (weight: 5%)');
+
       // STEP 4: Weighted final score
       final rawScore = 0.30 * who5Stress +
           0.20 * hrvStress +
@@ -266,6 +352,9 @@ class StressScoreService {
           0.05 * baselineStress;
 
       final stressScore = _clamp(rawScore);
+
+      debugPrint('📊 Raw Score: ${rawScore.toStringAsFixed(3)}');
+      debugPrint('📊 Final Score: ${stressScore.toStringAsFixed(3)}');
 
       // STEP 5: Binary label
       final stressLabelBinary = stressScore >= 0.6 ? 1 : 0;
