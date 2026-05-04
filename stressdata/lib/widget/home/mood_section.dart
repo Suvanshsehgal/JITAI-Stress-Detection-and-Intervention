@@ -4,29 +4,67 @@ import '../../core/theme/colors.dart';
 class MoodSection extends StatelessWidget {
   final double sleepHours;
   final double steps;
+  final VoidCallback? onSleepTap;
+
+  /// Score 0–100. Null = no test done yet.
+  final int? stressScore;
+
+  /// 0 = not stressed, 1 = stressed. Null if unavailable.
+  final int? stressLabel;
 
   const MoodSection({
     super.key,
     required this.sleepHours,
     required this.steps,
+    this.onSleepTap,
+    this.stressScore,
+    this.stressLabel,
   });
+
+  /// Returns emoji + mood label derived from the stress score/label.
+  _MoodData get _moodFromScore {
+    if (stressScore == null) {
+      return _MoodData('😶', 'No Data');
+    }
+    if (stressLabel == 1 || stressScore! < 30) {
+      return _MoodData('😟', 'Stressed');
+    }
+    if (stressScore! < 50) {
+      return _MoodData('😕', 'Uneasy');
+    }
+    if (stressScore! < 70) {
+      return _MoodData('😐', 'Moderate');
+    }
+    if (stressScore! < 85) {
+      return _MoodData('🙂', 'Good');
+    }
+    return _MoodData('😊', 'Excellent');
+  }
 
   @override
   Widget build(BuildContext context) {
+    final mood = _moodFromScore;
+
     return Row(
       children: [
         Expanded(
-          child: _MoodItem(
-            icon: Icons.bedtime_outlined,
-            value: sleepHours > 0 ? '${sleepHours.toStringAsFixed(1)} hrs' : '0 hrs',
-            label: 'SLEEP',
+          child: GestureDetector(
+            onTap: onSleepTap,
+            child: _MoodItem(
+              icon: Icons.bedtime_outlined,
+              value: sleepHours > 0
+                  ? '${sleepHours.toStringAsFixed(1)} hrs'
+                  : 'Tap to add',
+              label: 'SLEEP',
+            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _MoodItem(
-            emoji: '😊',
-            label: 'Current Mood',
+            emoji: mood.emoji,
+            value: mood.label,
+            label: 'MOOD',
             isCenter: true,
           ),
         ),
@@ -34,13 +72,23 @@ class MoodSection extends StatelessWidget {
         Expanded(
           child: _MoodItem(
             icon: Icons.directions_walk_outlined,
-            value: steps > 0 ? '${steps.toStringAsFixed(1)}k' : '0k',
+            value: steps > 0
+                ? steps >= 1
+                    ? '${steps.toStringAsFixed(1)}k'
+                    : '${(steps * 1000).round()}'
+                : '0',
             label: 'STEPS',
           ),
         ),
       ],
     );
   }
+}
+
+class _MoodData {
+  final String emoji;
+  final String label;
+  const _MoodData(this.emoji, this.label);
 }
 
 class _MoodItem extends StatelessWidget {
@@ -76,25 +124,19 @@ class _MoodItem extends StatelessWidget {
       child: Column(
         children: [
           if (emoji != null)
-            const Text(
-              '😊',
-              style: TextStyle(fontSize: 32),
-            )
+            Text(emoji!, style: const TextStyle(fontSize: 32))
           else if (icon != null)
-            Icon(
-              icon,
-              size: 32,
-              color: AppColors.primary,
-            ),
+            Icon(icon, size: 32, color: AppColors.primary),
           const SizedBox(height: 8),
           if (value != null)
             Text(
               value!,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
               ),
+              textAlign: TextAlign.center,
             ),
           const SizedBox(height: 4),
           Text(
