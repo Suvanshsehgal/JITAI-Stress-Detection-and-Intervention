@@ -142,16 +142,22 @@ class RecommendationCard extends StatelessWidget {
                         color: AppColors.primary,
                         height: 1.4,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
-                          rec.action,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: rec.color,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            rec.action,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: rec.color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 4),
