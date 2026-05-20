@@ -53,6 +53,7 @@ class PPGService {
   double get confidence => _confidence;
   SignalQuality get signalQuality => _signalQuality;
   bool get isInitialized => _isInitialized;
+  CameraController? get cameraController => _controller;
 
   // ─── IIR Filter State ────────────────────────────────────────────────────
   // 4th-order Butterworth bandpass implemented as two biquad sections (SOS).

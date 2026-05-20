@@ -8,6 +8,7 @@ import '../services/session_manager.dart';
 import '../services/sensor_capture_service.dart';
 import '../services/stress_score_service.dart';
 import 'ppg_test_screen.dart';
+import 'ppg_instruction_screen.dart';
 import 'questionnaire_test_screen.dart';
 import 'stroop_test_screen.dart';
 import 'speed_answer_test_screen.dart';
@@ -170,12 +171,12 @@ class _TestMapScreenState extends State<TestMapScreen> {
 
     switch (stage) {
       case TestStage.ppgPre:
-        screen = PpgTestScreen(
+        // Show instruction screen first for PPG pre-test
+        await _showPPGInstructionScreen(
           isPre: true,
-          onComplete: (bpm) => _onStageComplete(stage, {'bpm': bpm}),
-          sensorService: _sensorService,
+          stage: stage,
         );
-        break;
+        return;
       case TestStage.questionnairePre:
         screen = QuestionnaireTestScreen(
           startIndex: 0,
@@ -209,12 +210,12 @@ class _TestMapScreenState extends State<TestMapScreen> {
         );
         break;
       case TestStage.ppgPost:
-        screen = PpgTestScreen(
+        // Show instruction screen first for PPG post-test
+        await _showPPGInstructionScreen(
           isPre: false,
-          onComplete: (bpm) => _onStageComplete(stage, {'bpm': bpm}),
-          sensorService: _sensorService,
+          stage: stage,
         );
-        break;
+        return;
       case TestStage.completed:
         _showCompletionDialog();
         return;
@@ -229,6 +230,32 @@ class _TestMapScreenState extends State<TestMapScreen> {
     if (mounted && _progress.currentStage == TestStage.completed) {
       _showCompletionDialog();
     }
+  }
+
+  Future<void> _showPPGInstructionScreen({
+    required bool isPre,
+    required TestStage stage,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PPGInstructionScreen(
+          onContinue: () {
+            // Navigate to actual PPG test screen after instruction
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PpgTestScreen(
+                  isPre: isPre,
+                  onComplete: (bpm) => _onStageComplete(stage, {'bpm': bpm}),
+                  sensorService: _sensorService,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _onStageComplete(TestStage stage, Map<String, dynamic> result) {
