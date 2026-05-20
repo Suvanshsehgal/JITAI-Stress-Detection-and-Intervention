@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../core/theme/colors.dart';
-import 'onboarding.dart';
-import 'data_consent_screen.dart';
+import 'Login.dart';
+import 'Register.dart';
+import 'terms_conditions_screen.dart';
 import '../widget/custom_button.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -58,64 +59,60 @@ class SplashScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.primary.withOpacity(0.6),
+                  color: AppColors.primary.withValues(alpha: 0.6),
                   height: 1.5,
                 ),
               ),
 
               const Spacer(flex: 3),
 
-              // Continue Button
+              // Login Button
               CustomButton(
-                text: 'Continue',
-                onPressed: () async {
-                  final result = await Navigator.push(
+                text: 'Login',
+                onPressed: () {
+                  Navigator.pushReplacement(
                     context,
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          DataConsentScreen(
-                            onComplete: () {},
-                          ),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(1.0, 0.0);
-                        const end = Offset.zero;
-                        const curve = Curves.easeInOut;
-                        var tween = Tween(begin: begin, end: end)
-                            .chain(CurveTween(curve: curve));
-                        return SlideTransition(
-                          position: animation.drive(tween),
-                          child: child,
-                        );
-                      },
-                      transitionDuration: const Duration(milliseconds: 400),
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
                     ),
                   );
-                  
-                  if (result == true && context.mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const OnboardingScreen(),
-                      ),
-                    );
-                  }
                 },
                 isPrimary: true,
               ),
 
+              const SizedBox(height: 12),
+
+              // Signup Button
+              CustomButton(
+                text: 'Sign Up',
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const RegisterScreen(),
+                    ),
+                  );
+                },
+                isPrimary: false,
+              ),
+
               const SizedBox(height: 16),
 
-              // Privacy & Policy
+              // Terms & Conditions
               TextButton(
                 onPressed: () {
-                  // TODO: Navigate to privacy policy
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TermsConditionsScreen(),
+                    ),
+                  );
                 },
                 child: Text(
-                  'Privacy & Policy',
+                  'Terms & Conditions',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.primary.withOpacity(0.7),
+                    color: AppColors.primary.withValues(alpha: 0.7),
                   ),
                 ),
               ),

@@ -89,7 +89,7 @@ class OnboardingScreen extends StatelessWidget {
 
                       // Description
                       Text(
-                        'We\'re building a JIT-AI based stress detection system to better understand and manage daily stress. Your participation helps us improve by getting accurate data about your own stress patterns.',
+                        'Calculate your stress and be stress free',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
