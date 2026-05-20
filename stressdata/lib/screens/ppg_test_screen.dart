@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:camera/camera.dart';
 import '../services/ppg_service.dart';
 import '../services/session_manager.dart';
 import '../services/database_service.dart';
@@ -10,6 +11,7 @@ import '../models/ppg_data.dart';
 import '../widget/custom_button.dart';
 import '../widget/ppg/ppg_waveform_painter.dart';
 import '../core/theme/colors.dart';
+import 'ppg_instruction_screen.dart';
 
 class PpgTestScreen extends StatefulWidget {
   final bool isPre;
@@ -456,33 +458,85 @@ class _PpgTestScreenState extends State<PpgTestScreen>
         body: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  // Recording banner — shown only during post_test sensor capture
-                  if (_isRecording) _buildRecordingBanner(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final screenHeight = constraints.maxHeight;
+                final screenWidth = constraints.maxWidth;
+                
+                // Calculate responsive sizes
+                final cameraSize = screenHeight > 600 ? 250.0 : 200.0;
+                final padding = screenHeight > 600 ? 20.0 : 16.0;
+                final spacing = screenHeight > 600 ? 32.0 : 20.0;
+                
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: EdgeInsets.all(padding),
+                        child: Column(
+                          children: [
+                            // Recording banner — shown only during post_test sensor capture
+                            if (_isRecording) _buildRecordingBanner(),
 
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildProgressIndicator(),
-                  const SizedBox(height: 32),
-                  _buildHeartRateDisplay(),
-                  const SizedBox(height: 32),
-                  _buildWaveform(),
-                  const SizedBox(height: 24),
-                  _buildStatusMessage(),
-                  const Spacer(),
-                  if (_currentState == PPGState.complete)
-                    CustomButton(
-                      text: 'Continue',
-                      onPressed: _handleComplete,
-                    )
-                  else
-                    _buildInstructions(),
-                  const SizedBox(height: 20),
-                ],
-              ),
+                            _buildHeader(),
+                            SizedBox(height: spacing),
+                            _buildProgressIndicator(),
+                            SizedBox(height: spacing),
+                            
+                            // Camera view circle with heart rate in center
+                            _buildCameraViewCircle(size: cameraSize),
+                            
+                            SizedBox(height: spacing),
+                            _buildWaveform(),
+                            SizedBox(height: spacing / 2),
+                            _buildStatusMessage(),
+                            const Spacer(),
+                            if (_currentState == PPGState.complete)
+                              CustomButton(
+                                text: 'Continue',
+                                onPressed: _handleComplete,
+                              )
+                            else
+                              Column(
+                                children: [
+                                  _buildInstructions(),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: () {
+                                      // Show instruction screen again
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => PPGInstructionScreen(
+                                            onContinue: () {
+                                              Navigator.pop(context);
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Text(
+                                      'Need visual guide?',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.primary.withValues(alpha: 0.7),
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            SizedBox(height: padding),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -562,72 +616,188 @@ class _PpgTestScreenState extends State<PpgTestScreen>
     );
   }
 
-  Widget _buildHeartRateDisplay() {
+  Widget _buildCameraViewCircle({double size = 250}) {
+    final heartRateSize = size * 0.48; // 48% of camera size
+    final fontSize = size * 0.192; // 48% of 40% of size
+    
     return ScaleTransition(
       scale: _pulseAnimation,
-      child: Container(
-        width: 200,
-        height: 200,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF9B2B1A).withValues(alpha: 0.2),
-              blurRadius: 20,
-              spreadRadius: 5,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Camera preview circle
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.black,
+              border: Border.all(
+                color: const Color(0xFF9B2B1A),
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_currentBPM > 0)
-              TweenAnimationBuilder<int>(
-                tween: IntTween(begin: 0, end: _currentBPM),
-                duration: const Duration(milliseconds: 500),
-                builder: (context, value, child) {
-                  return Text(
-                    '$value',
-                    style: const TextStyle(
-                      fontSize: 64,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF9B2B1A),
+            child: ClipOval(
+              child: _buildCameraPreview(),
+            ),
+          ),
+          
+          // Heart rate display overlay in center
+          Positioned(
+            child: Container(
+              width: heartRateSize,
+              height: heartRateSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withValues(alpha: 0.7),
+                border: Border.all(
+                  color: const Color(0xFF9B2B1A),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_currentBPM > 0)
+                    TweenAnimationBuilder<int>(
+                      tween: IntTween(begin: 0, end: _currentBPM),
+                      duration: const Duration(milliseconds: 500),
+                      builder: (context, value, child) {
+                        return Text(
+                          '$value',
+                          style: TextStyle(
+                            fontSize: fontSize,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                    )
+                  else if (_currentState == PPGState.warmingUp)
+                    Icon(
+                      Icons.favorite,
+                      size: fontSize,
+                      color: Colors.white,
+                    )
+                  else
+                    SizedBox(
+                      width: fontSize * 0.5,
+                      height: fontSize * 0.5,
+                      child: const CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
                     ),
-                  );
-                },
-              )
-            else if (_currentState == PPGState.warmingUp)
-              const Icon(
-                Icons.favorite,
-                size: 64,
-                color: Color(0xFF9B2B1A),
-              )
-            else
-              const CircularProgressIndicator(
-                color: Color(0xFF9B2B1A),
-              ),
-            const SizedBox(height: 8),
-            Text(
-              _currentBPM > 0
-                  ? 'BPM'
-                  : _currentState == PPGState.warmingUp
-                      ? 'Warming Up'
-                      : 'Initializing',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
+                  const SizedBox(height: 4),
+                  Text(
+                    _currentBPM > 0
+                        ? 'BPM'
+                        : _currentState == PPGState.warmingUp
+                            ? 'Warming Up'
+                            : 'Initializing',
+                    style: TextStyle(
+                      fontSize: fontSize * 0.3,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  if (_currentBPM > 0 && _confidence > 0) ...[
+                    const SizedBox(height: 4),
+                    _buildConfidenceIndicator(),
+                  ],
+                ],
               ),
             ),
-            if (_currentBPM > 0 && _confidence > 0) ...[
-              const SizedBox(height: 8),
-              _buildConfidenceIndicator(),
-            ],
-          ],
-        ),
+          ),
+          
+          // Finger placement guide
+          Positioned(
+            bottom: size * 0.08,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: size * 0.064,
+                vertical: size * 0.032,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.touch_app,
+                    color: Colors.white,
+                    size: size * 0.064,
+                  ),
+                  SizedBox(width: size * 0.032),
+                  Text(
+                    'Cover camera & flash',
+                    style: TextStyle(
+                      fontSize: size * 0.048,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+  
+  Widget _buildCameraPreview() {
+    if (_ppgService.cameraController != null && 
+        _ppgService.cameraController!.value.isInitialized) {
+      return CameraPreview(_ppgService.cameraController!);
+    } else {
+      // Show placeholder while camera is initializing
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            colors: [
+              Color(0xFF333333),
+              Colors.black,
+            ],
+            stops: [0.3, 1.0],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(
+                color: Colors.white,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _currentState == PPGState.initializing
+                    ? 'Initializing camera...'
+                    : 'Camera warming up...',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildConfidenceIndicator() {
@@ -643,26 +813,26 @@ class _PpgTestScreenState extends State<PpgTestScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: confidenceColor.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(12),
+        color: confidenceColor.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.signal_cellular_alt,
-            size: 16,
-            color: confidenceColor,
+            size: 12,
+            color: Colors.white,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           Text(
             '${_confidence.toInt()}%',
-            style: TextStyle(
-              fontSize: 12,
+            style: const TextStyle(
+              fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: confidenceColor,
+              color: Colors.white,
             ),
           ),
         ],
@@ -672,7 +842,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
 
   Widget _buildWaveform() {
     return Container(
-      height: 120,
+      height: 100,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -755,30 +925,76 @@ class _PpgTestScreenState extends State<PpgTestScreen>
 
   Widget _buildInstructions() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.primaryLight.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppColors.primary.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            color: AppColors.primary,
-            size: 24,
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Quick Guide',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A0A08),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
+          const SizedBox(height: 8),
+          _buildInstructionStep('• Cover camera & flash with fingertip'),
+          _buildInstructionStep('• Apply light pressure'),
+          _buildInstructionStep('• Keep finger still for 30s'),
+          const SizedBox(height: 4),
+          Text(
+            'Tap "Need visual guide?" for detailed instructions',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.primary.withValues(alpha: 0.6),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionStep(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 3.0),
+            child: Icon(
+              Icons.circle,
+              size: 5,
+              color: Color(0xFF666666),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Place your finger firmly on the back camera and flash. Keep it steady for ${_measurementDuration} seconds.',
+              text,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 color: AppColors.primary.withValues(alpha: 0.8),
-                height: 1.4,
+                height: 1.3,
               ),
             ),
           ),
