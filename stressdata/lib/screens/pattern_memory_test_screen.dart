@@ -268,13 +268,9 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                 _buildProgressBar(),
                 const SizedBox(height: 32),
                 _buildStatusIndicator(),
-                const SizedBox(height: 32),
-                Expanded(
-                  child: Center(
-                    child: _buildGrid(),
-                  ),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                _buildGrid(),
+                const SizedBox(height: 24),
                 _buildScoreDisplay(),
               ],
             ),
@@ -646,67 +642,70 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
     final gridSize = _currentQuestion.gridSize;
     final crossAxisCount = gridSize == 9 ? 3 : 4;
 
-    return AspectRatio(
-      aspectRatio: 1,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-        ),
-        itemCount: gridSize,
-        itemBuilder: (context, index) {
-          final isPattern = _currentQuestion.pattern.contains(index);
-          final isSelected = _selectedCells.contains(index);
-          final shouldHighlight = _showingPattern && isPattern;
+    return Flexible(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: true,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+          ),
+          itemCount: gridSize,
+          itemBuilder: (context, index) {
+            final isPattern = _currentQuestion.pattern.contains(index);
+            final isSelected = _selectedCells.contains(index);
+            final shouldHighlight = _showingPattern && isPattern;
 
-          return FadeTransition(
-            opacity: _fadeController,
-            child: GestureDetector(
-              onTap: () => _handleCellTap(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: shouldHighlight
-                      ? const Color(0xFF4CAF50)
-                      : isSelected
-                          ? const Color(0xFF2196F3)
-                          : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
+            return FadeTransition(
+              opacity: _fadeController,
+              child: GestureDetector(
+                onTap: () => _handleCellTap(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
                     color: shouldHighlight
                         ? const Color(0xFF4CAF50)
                         : isSelected
                             ? const Color(0xFF2196F3)
-                            : const Color(0xFFE5D5CC),
-                    width: 3,
+                            : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: shouldHighlight
+                          ? const Color(0xFF4CAF50)
+                          : isSelected
+                              ? const Color(0xFF2196F3)
+                              : const Color(0xFFE5D5CC),
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      if (shouldHighlight || isSelected)
+                        BoxShadow(
+                          color: (shouldHighlight
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFF2196F3))
+                              .withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
                   ),
-                  boxShadow: [
-                    if (shouldHighlight || isSelected)
-                      BoxShadow(
-                        color: (shouldHighlight
-                                ? const Color(0xFF4CAF50)
-                                : const Color(0xFF2196F3))
-                            .withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                  ],
-                ),
-                child: Center(
-                  child: isSelected
-                      ? const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 32,
-                        )
-                      : null,
+                  child: Center(
+                    child: isSelected
+                        ? const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 32,
+                          )
+                        : null,
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

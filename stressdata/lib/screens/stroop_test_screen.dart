@@ -239,15 +239,15 @@ class _StroopTestScreenState extends State<StroopTestScreen>
             child: Column(
               children: [
                 _buildHeader(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 _buildProgressBar(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildTimer(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildWordDisplay(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 _buildOptions(),
-                const Spacer(),
+                const SizedBox(height: 12),
                 _buildScoreDisplay(),
               ],
             ),
@@ -585,61 +585,74 @@ class _StroopTestScreenState extends State<StroopTestScreen>
   }
 
   Widget _buildOptions() {
-    return GridView.count(
-      shrinkWrap: true,
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.8,
-      children: _currentQuestion.options.map((option) {
-        Color optionColor;
-        switch (option) {
-          case 'Red':
-            optionColor = const Color(0xFFF44336);
-            break;
-          case 'Blue':
-            optionColor = const Color(0xFF2196F3);
-            break;
-          case 'Green':
-            optionColor = const Color(0xFF4CAF50);
-            break;
-          case 'Yellow':
-            optionColor = const Color(0xFFFFEB3B);
-            break;
-          default:
-            optionColor = const Color(0xFF9B2B1A);
-        }
-        return InkWell(
-          onTap: _answered ? null : () => _handleAnswer(option),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: optionColor.withValues(alpha: 0.3), width: 2),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
+    return Expanded(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.6,
+            children: _currentQuestion.options.map((option) {
+              Color optionColor;
+              switch (option) {
+                case 'Red':
+                  optionColor = const Color(0xFFF44336);
+                  break;
+                case 'Blue':
+                  optionColor = const Color(0xFF2196F3);
+                  break;
+                case 'Green':
+                  optionColor = const Color(0xFF4CAF50);
+                  break;
+                case 'Yellow':
+                  optionColor = const Color(0xFFFFEB3B);
+                  break;
+                default:
+                  optionColor = const Color(0xFF9B2B1A);
+              }
+              return InkWell(
+                onTap: _answered ? null : () => _handleAnswer(option),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: optionColor, shape: BoxShape.circle),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: optionColor.withValues(alpha: 0.3), width: 2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                            color: optionColor, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(height: 6),
+                      Flexible(
+                        child: Text(
+                          option,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A0A08),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text(option,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A0A08))),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+              );
+            }).toList(),
+          );
+        },
+      ),
     );
   }
 
