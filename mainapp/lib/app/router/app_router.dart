@@ -13,6 +13,10 @@ import '../../features/profile/profile_screen.dart';
 import '../../features/health/health_screen.dart';
 import '../../features/garden/garden_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/toolbox/history_screen.dart';
+import '../../features/interventions/screens/intervention_detail_screen.dart';
+import '../../features/interventions/screens/intervention_runner_router.dart';
+import '../../features/interventions/screens/intervention_completion_screen.dart';
 import '../widgets/app_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -57,6 +61,36 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/sos',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SosScreen(),
+      ),
+      GoRoute(
+        path: '/history',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HistoryScreen(),
+      ),
+      GoRoute(
+        path: '/intervention/:id',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return InterventionDetailScreen(interventionId: id);
+        },
+      ),
+      GoRoute(
+        path: '/intervention/:id/run',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return InterventionRunnerRouter(interventionId: id);
+        },
+      ),
+      GoRoute(
+        path: '/intervention/:id/complete',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final startedAt = state.extra as DateTime? ?? DateTime.now();
+          return InterventionCompletionScreen(interventionId: id, startedAt: startedAt);
+        },
       ),
       GoRoute(
         path: '/health',
