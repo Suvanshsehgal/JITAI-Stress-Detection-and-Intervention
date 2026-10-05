@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers/shared_prefs_provider.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/buddy/buddy_screen.dart';
@@ -12,9 +14,22 @@ import '../../features/health/health_screen.dart';
 import '../../features/garden/garden_screen.dart';
 import '../../features/settings/settings_screen.dart';
 
-class AppRouter {
-  static final GoRouter router = GoRouter(
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
     initialLocation: '/',
+    redirect: (context, state) {
+      final prefs = ref.read(sharedPreferencesProvider);
+      final isCompleted = prefs.getBool('onboardingCompleted') ?? false;
+      final isOnboarding = state.uri.toString() == '/onboarding';
+
+      if (!isCompleted && !isOnboarding) {
+        return '/onboarding';
+      }
+      if (isCompleted && state.uri.toString() == '/') {
+        return '/home';
+      }
+      return null;
+    },
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Error')),
       body: Center(child: Text('Route not found: \${state.uri.toString()}')),
@@ -22,6 +37,10 @@ class AppRouter {
     routes: [
       GoRoute(
         path: '/',
+        builder: (context, state) => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      ),
+      GoRoute(
+        path: '/home',
         builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
@@ -62,4 +81,4 @@ class AppRouter {
       ),
     ],
   );
-}
+});
