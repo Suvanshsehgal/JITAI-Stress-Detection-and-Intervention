@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/ebb_card.dart';
 
 class BuddyScreen extends StatelessWidget {
   const BuddyScreen({super.key});
@@ -6,9 +7,19 @@ class BuddyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('BuddyScreen')),
-      body: const Center(
-        child: Text('Placeholder for BuddyScreen'),
+      appBar: AppBar(title: const Text('Buddy')),
+      body: const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: EbbCard(
+            child: Center(
+              child: Text(
+                'Buddy Chatbot Interface\n(Future Phase)',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
