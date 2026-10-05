@@ -43,6 +43,8 @@ class _PpgTestScreenState extends State<PpgTestScreen>
   List<double> _waveformData = [];
   String _statusMessage = 'Initializing...';
   bool _isRecording = false;
+  int _recordingCountdown = 30;
+  Timer? _recordingTimer;
   
   // Animation controllers
   late AnimationController _pulseController;
@@ -346,10 +348,24 @@ class _PpgTestScreenState extends State<PpgTestScreen>
   Future<void> _runPostTestAndRecovery(int bpm) async {
     if (!mounted) return;
 
-    // post_test — 30s silent sensor capture with recording banner
-    if (mounted) setState(() => _isRecording = true);
+    // post_test — 30s sensor capture with countdown timer
+    if (mounted) {
+      setState(() {
+        _isRecording = true;
+        _recordingCountdown = 30;
+      });
+    }
     widget.sensorService.startCapture('post_test');
+
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _recordingCountdown > 0) {
+        setState(() => _recordingCountdown--);
+      }
+    });
+
     await Future.delayed(const Duration(seconds: 30));
+    _recordingTimer?.cancel();
+
     final postResult = await widget.sensorService.stopCapture();
     if (mounted) setState(() => _isRecording = false);
 
@@ -434,6 +450,7 @@ class _PpgTestScreenState extends State<PpgTestScreen>
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _pulseController.dispose();
     _fadeController.dispose();
     _measurementTimer?.cancel();
@@ -461,7 +478,6 @@ class _PpgTestScreenState extends State<PpgTestScreen>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final screenHeight = constraints.maxHeight;
-                final screenWidth = constraints.maxWidth;
                 
                 // Calculate responsive sizes
                 final cameraSize = screenHeight > 600 ? 250.0 : 200.0;
@@ -1015,12 +1031,14 @@ class _PpgTestScreenState extends State<PpgTestScreen>
         children: [
           _PulsingDot(),
           const SizedBox(width: 10),
-          const Text(
-            'Recording sensor data...',
+          Text(
+            'Recording sensor data... ${_recordingCountdown}s',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: _recordingCountdown <= 5
+                  ? const Color(0xFFE53935)
+                  : Colors.white,
             ),
           ),
         ],

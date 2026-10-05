@@ -1,5 +1,3 @@
-import 'dart:math';
-
 class SpeedQuestion {
   final int id;
   final String question;

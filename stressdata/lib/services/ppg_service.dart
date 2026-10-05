@@ -522,7 +522,3 @@ class PPGService {
   }
 }
 
-extension on SignalQuality {
-  bool get isReliable =>
-      this == SignalQuality.excellent || this == SignalQuality.good;
-}

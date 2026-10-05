@@ -28,6 +28,8 @@ class _TestMapScreenState extends State<TestMapScreen> {
 
   bool _isInitializing = false;
   bool _isRecording = false;
+  int _recordingCountdown = 30;
+  Timer? _recordingTimer;
   Timer? _silentCaptureTimer;
 
   // Part 4: Baseline tracking
@@ -138,16 +140,25 @@ class _TestMapScreenState extends State<TestMapScreen> {
     }
   }
 
-  /// Capture pre-test baseline silently in the background (no UI indicator)
+  /// Capture pre-test baseline with countdown timer
   Future<void> _runPreTestCapture() async {
-    setState(() => _isRecording = true);
+    setState(() {
+      _isRecording = true;
+      _recordingCountdown = 30;
+    });
     _sensorService.startCapture('pre_test');
 
-    // Wait 30s silently — user sees the normal test map UI
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _recordingCountdown > 0) {
+        setState(() => _recordingCountdown--);
+      }
+    });
+
     await Future.delayed(const Duration(seconds: 30));
 
     if (!mounted) return;
 
+    _recordingTimer?.cancel();
     final result = await _sensorService.stopCapture();
     setState(() => _isRecording = false);
 
@@ -221,6 +232,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
         return;
     }
 
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
@@ -386,6 +398,7 @@ class _TestMapScreenState extends State<TestMapScreen> {
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _silentCaptureTimer?.cancel();
     super.dispose();
   }
@@ -606,12 +619,14 @@ class _TestMapScreenState extends State<TestMapScreen> {
           // Pulsing red dot
           _PulsingDot(),
           const SizedBox(width: 10),
-          const Text(
-            'Recording sensor data...',
+          Text(
+            'Recording sensor data... ${_recordingCountdown}s',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: _recordingCountdown <= 5
+                  ? const Color(0xFFE53935)
+                  : Colors.white,
             ),
           ),
         ],

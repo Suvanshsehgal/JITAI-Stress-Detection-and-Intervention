@@ -6,6 +6,28 @@ import '../models/pattern_memory_model.dart';
 import '../services/session_manager.dart';
 import '../services/sensor_capture_service.dart';
 
+const _displayDuration = 3;
+const _inputDuration = 5;
+
+const _shapeColors = [
+  Color(0xFFE53935),
+  Color(0xFF1E88E5),
+  Color(0xFF43A047),
+  Color(0xFFFB8C00),
+  Color(0xFF8E24AA),
+  Color(0xFF00ACC1),
+  Color(0xFFD81B60),
+  Color(0xFF6D4C41),
+];
+
+const _shapes = PatternShape.values;
+
+class _CellDisplay {
+  final PatternShape shape;
+  final Color color;
+  _CellDisplay({required this.shape, required this.color});
+}
+
 class PatternMemoryTestScreen extends StatefulWidget {
   final Function(int score) onComplete;
   final SensorCaptureService sensorService;
@@ -23,9 +45,7 @@ class PatternMemoryTestScreen extends StatefulWidget {
 
 class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
     with TickerProviderStateMixin {
-  // 10 randomly selected questions for this session
   late final List<PatternQuestion> _questions;
-
   int _currentQuestionIndex = 0;
   final List<PatternAnswer> _answers = [];
   bool _showInstructions = true;
@@ -39,13 +59,17 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   late AnimationController _pulseController;
   late AnimationController _fadeController;
 
+  int _secondsRemaining = 0;
+  Timer? _countdownTimer;
+  Timer? _phaseTimeout;
+  Map<int, _CellDisplay> _cellDisplays = {};
+
   PatternQuestion get _currentQuestion => _questions[_currentQuestionIndex];
   bool get _isLastQuestion => _currentQuestionIndex == _questions.length - 1;
 
   @override
   void initState() {
     super.initState();
-    // Pick 10 random non-repeating questions from the full pool
     final pool = List<PatternQuestion>.from(patternQuestions)..shuffle(Random());
     _questions = pool.take(10).toList();
 
@@ -61,29 +85,79 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   }
 
   void _startTest() {
-    setState(() {
-      _showInstructions = false;
-    });
+    setState(() => _showInstructions = false);
     _startQuestion();
   }
 
+  void _generateCellDisplays() {
+    final displays = <int, _CellDisplay>{};
+    final random = Random();
+    final colorPool = List<Color>.from(_shapeColors)..shuffle(random);
+    final shapePool = List<PatternShape>.from(_shapes)..shuffle(random);
+
+    for (final cellIndex in _currentQuestion.pattern) {
+      final color = colorPool[_currentQuestion.pattern.indexOf(cellIndex) % colorPool.length];
+      final shape = shapePool[_currentQuestion.pattern.indexOf(cellIndex) % shapePool.length];
+      displays[cellIndex] = _CellDisplay(color: color, shape: shape);
+    }
+
+    for (int i = 0; i < _currentQuestion.gridSize; i++) {
+      if (!displays.containsKey(i)) {
+        displays[i] = _CellDisplay(
+          color: Colors.grey,
+          shape: _shapes[random.nextInt(_shapes.length)],
+        );
+      }
+    }
+
+    _cellDisplays = displays;
+  }
+
   void _startQuestion() {
+    _generateCellDisplays();
+    _questionStartTime = DateTime.now();
+    _secondsRemaining = _displayDuration;
+    _selectedCells = [];
+
     setState(() {
       _showingPattern = true;
       _userTurn = false;
-      _selectedCells = [];
-      _questionStartTime = DateTime.now();
     });
 
     _fadeController.forward(from: 0);
 
-    Future.delayed(
-        Duration(milliseconds: _currentQuestion.displayDuration), () {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _secondsRemaining > 0) {
+        setState(() => _secondsRemaining--);
+      }
+    });
+
+    _phaseTimeout = Timer(Duration(seconds: _displayDuration), () {
       if (mounted) {
-        setState(() {
-          _showingPattern = false;
-          _userTurn = true;
-        });
+        _countdownTimer?.cancel();
+        _startInputPhase();
+      }
+    });
+  }
+
+  void _startInputPhase() {
+    _secondsRemaining = _inputDuration;
+
+    setState(() {
+      _showingPattern = false;
+      _userTurn = true;
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _secondsRemaining > 0) {
+        setState(() => _secondsRemaining--);
+      }
+    });
+
+    _phaseTimeout = Timer(Duration(seconds: _inputDuration), () {
+      if (mounted) {
+        _countdownTimer?.cancel();
+        _checkAnswer();
       }
     });
   }
@@ -91,11 +165,11 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
   void _handleCellTap(int index) {
     if (!_userTurn || _selectedCells.contains(index)) return;
 
-    setState(() {
-      _selectedCells.add(index);
-    });
+    setState(() => _selectedCells.add(index));
 
     if (_selectedCells.length == _currentQuestion.pattern.length) {
+      _phaseTimeout?.cancel();
+      _countdownTimer?.cancel();
       _checkAnswer();
     }
   }
@@ -166,10 +240,14 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                   color: Color(0xFF1A0A08),
                 ),
               ),
+              if (_cellDisplays.containsKey(_currentQuestion.pattern.isNotEmpty ? _currentQuestion.pattern.first : -1) && !isCorrect) ...[
+                const SizedBox(height: 12),
+                _buildPatternPreview(),
+              ],
               if (_streak > 1 && isCorrect) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '🧠 ${_streak}x Streak!',
+                  '${_streak}x Streak!',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -183,7 +261,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
       ),
     );
 
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         Navigator.of(context).pop();
         if (_isLastQuestion) {
@@ -198,6 +276,46 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
     });
   }
 
+  Widget _buildPatternPreview() {
+    final count = min(_currentQuestion.pattern.length, 6);
+    final cells = _currentQuestion.pattern.take(count).toList();
+    return Column(
+      children: [
+        const Text('Correct cells:',
+          style: TextStyle(fontSize: 13, color: Color(0xFF666666))),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: cells.map((i) {
+            final d = _cellDisplays[i];
+            return Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: d?.color.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: d?.color ?? Colors.grey, width: 2),
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CustomPaint(
+                    painter: _ShapePainter(
+                      shape: d?.shape ?? PatternShape.circle,
+                      color: d?.color ?? Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   Future<void> _completeTest() async {
     await _saveToDatabase();
     widget.onComplete(_score);
@@ -208,25 +326,20 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
 
   Future<void> _saveToDatabase() async {
     try {
-      // Calculate metrics
       final correctAnswers = _answers.where((a) => a.isCorrect).length;
       final totalQuestions = _answers.length;
       final accuracy = correctAnswers / totalQuestions;
-      final maxLevel = _currentQuestionIndex + 1; // Highest level reached
+      final maxLevel = _currentQuestionIndex + 1;
 
-      // Store metrics in SessionManager (will be saved after all cognitive tests)
       _sessionManager.storeMemoryMetrics(
         maxLevel: maxLevel,
         accuracy: accuracy,
       );
 
-      debugPrint('✅ Pattern Memory metrics stored in SessionManager');
-      
-      // NOW save all cognitive metrics to database (this is the last cognitive test)
+      debugPrint('Pattern Memory metrics stored in SessionManager');
       await _sessionManager.saveCognitiveMetrics();
-      
     } catch (e) {
-      debugPrint('❌ Failed to store/save Pattern Memory metrics: $e');
+      debugPrint('Failed to store/save Pattern Memory metrics: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -240,6 +353,8 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
+    _phaseTimeout?.cancel();
     _pulseController.dispose();
     _fadeController.dispose();
     super.dispose();
@@ -266,11 +381,13 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                 _buildHeader(),
                 const SizedBox(height: 24),
                 _buildProgressBar(),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
+                _buildTimerBar(),
+                const SizedBox(height: 16),
                 _buildStatusIndicator(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 _buildGrid(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 _buildScoreDisplay(),
               ],
             ),
@@ -330,7 +447,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                             child: Container(
                               padding: const EdgeInsets.all(24),
                               decoration: const BoxDecoration(
-                                color: Color(0xFF4CAF50),
+                                color: Color(0xFF8E24AA),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -353,22 +470,22 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                           _buildInstructionCard(
                             '1',
                             'Watch the Pattern',
-                            'Memorize which cells light up',
+                            'Memorize the shapes, colors, and positions ($_displayDuration sec)',
                             Icons.visibility,
                           ),
                           const SizedBox(height: 16),
                           _buildInstructionCard(
                             '2',
                             'Recall & Tap',
-                            'Tap the same cells you saw',
+                            'Tap the same cells you saw ($_inputDuration sec)',
                             Icons.touch_app,
                           ),
                           const SizedBox(height: 16),
                           _buildInstructionCard(
                             '3',
-                            'Get Faster',
-                            'Patterns get harder as you progress',
-                            Icons.trending_up,
+                            'Shapes & Colors',
+                            'Each cell has a unique shape and color to remember',
+                            Icons.palette,
                           ),
                           const SizedBox(height: 32),
                           Container(
@@ -380,21 +497,43 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                             child: Column(
                               children: [
                                 const Text(
-                                  'Tip:',
+                                  'Shape Legend:',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF1A0A08),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Focus on the pattern, not individual cells',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF666666),
-                                  ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 8,
+                                  alignment: WrapAlignment.center,
+                                  children: PatternShape.values.map((s) {
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CustomPaint(
+                                            painter: _ShapePainter(
+                                              shape: s,
+                                              color: const Color(0xFF4B3425),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          s.name,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF666666),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
                                 ),
                               ],
                             ),
@@ -411,7 +550,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                   child: ElevatedButton(
                     onPressed: _startTest,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
+                      backgroundColor: const Color(0xFF8E24AA),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -449,7 +588,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+              color: const Color(0xFF8E24AA).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -458,7 +597,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF4CAF50),
+                  color: Color(0xFF8E24AA),
                 ),
               ),
             ),
@@ -487,11 +626,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
               ],
             ),
           ),
-          Icon(
-            icon,
-            color: const Color(0xFF4CAF50),
-            size: 28,
-          ),
+          Icon(icon, color: const Color(0xFF8E24AA), size: 28),
         ],
       ),
     );
@@ -528,7 +663,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                    colors: [Color(0xFF8E24AA), Color(0xFFAB47BC)],
                   ),
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -572,7 +707,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4CAF50),
+                color: Color(0xFF8E24AA),
               ),
             ),
           ],
@@ -581,9 +716,55 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
         LinearProgressIndicator(
           value: (_currentQuestionIndex + 1) / _questions.length,
           backgroundColor: const Color(0xFFE5D5CC),
-          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF8E24AA)),
           minHeight: 8,
           borderRadius: BorderRadius.circular(4),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimerBar() {
+    final total = _showingPattern ? _displayDuration : _inputDuration;
+    final remaining = _secondsRemaining;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _showingPattern ? 'Memorize' : 'Recall',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF666666),
+              ),
+            ),
+            Text(
+              '${remaining}s',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: remaining <= 2 ? Colors.red : const Color(0xFF8E24AA),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: remaining / total),
+          duration: const Duration(milliseconds: 300),
+          builder: (context, value, _) {
+            return LinearProgressIndicator(
+              value: value,
+              backgroundColor: const Color(0xFFE5D5CC),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                remaining <= 2 ? Colors.red : const Color(0xFF8E24AA),
+              ),
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(3),
+            );
+          },
         ),
       ],
     );
@@ -594,7 +775,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         color: _showingPattern
-            ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
+            ? const Color(0xFF8E24AA).withValues(alpha: 0.1)
             : _userTurn
                 ? const Color(0xFF2196F3).withValues(alpha: 0.1)
                 : Colors.white,
@@ -610,7 +791,7 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
                     ? Icons.touch_app
                     : Icons.hourglass_empty,
             color: _showingPattern
-                ? const Color(0xFF4CAF50)
+                ? const Color(0xFF8E24AA)
                 : _userTurn
                     ? const Color(0xFF2196F3)
                     : const Color(0xFF666666),
@@ -619,15 +800,15 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
           const SizedBox(width: 8),
           Text(
             _showingPattern
-                ? 'Watch the Pattern...'
+                ? 'Watch the Pattern... ${_secondsRemaining}s'
                 : _userTurn
-                    ? 'Your Turn! (${_selectedCells.length}/${_currentQuestion.pattern.length})'
+                    ? 'Your Turn! ${_selectedCells.length}/${_currentQuestion.pattern.length}  ${_secondsRemaining}s'
                     : 'Get Ready...',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: _showingPattern
-                  ? const Color(0xFF4CAF50)
+                  ? const Color(0xFF8E24AA)
                   : _userTurn
                       ? const Color(0xFF2196F3)
                       : const Color(0xFF666666),
@@ -650,61 +831,118 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
           shrinkWrap: true,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
           ),
           itemCount: gridSize,
           itemBuilder: (context, index) {
             final isPattern = _currentQuestion.pattern.contains(index);
             final isSelected = _selectedCells.contains(index);
-            final shouldHighlight = _showingPattern && isPattern;
+            final cellDisplay = _cellDisplays[index];
 
-            return FadeTransition(
-              opacity: _fadeController,
-              child: GestureDetector(
-                onTap: () => _handleCellTap(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    color: shouldHighlight
-                        ? const Color(0xFF4CAF50)
-                        : isSelected
-                            ? const Color(0xFF2196F3)
-                            : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: shouldHighlight
-                          ? const Color(0xFF4CAF50)
-                          : isSelected
-                              ? const Color(0xFF2196F3)
-                              : const Color(0xFFE5D5CC),
-                      width: 3,
-                    ),
-                    boxShadow: [
-                      if (shouldHighlight || isSelected)
-                        BoxShadow(
-                          color: (shouldHighlight
-                                  ? const Color(0xFF4CAF50)
-                                  : const Color(0xFF2196F3))
-                              .withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                    ],
-                  ),
-                  child: Center(
-                    child: isSelected
-                        ? const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 32,
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-            );
+            if (_showingPattern) {
+              return _buildDisplayCell(index, isPattern, cellDisplay);
+            } else {
+              return _buildInputCell(index, isPattern, isSelected, cellDisplay);
+            }
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisplayCell(int index, bool isPattern, _CellDisplay? display) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isPattern
+            ? (display?.color ?? const Color(0xFF4CAF50)).withValues(alpha: 0.25)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPattern
+              ? (display?.color ?? const Color(0xFF4CAF50))
+              : const Color(0xFFE5D5CC),
+          width: isPattern ? 3 : 2,
+        ),
+        boxShadow: isPattern
+            ? [
+                BoxShadow(
+                  color: (display?.color ?? const Color(0xFF4CAF50))
+                      .withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: display != null
+              ? Opacity(
+                  opacity: isPattern ? 1.0 : 0.25,
+                  child: CustomPaint(
+                    painter: _ShapePainter(
+                      shape: display.shape,
+                      color: isPattern ? display.color : Colors.grey,
+                    ),
+                    size: const Size.square(40),
+                  ),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputCell(
+      int index, bool isPattern, bool isSelected, _CellDisplay? display) {
+    return GestureDetector(
+      onTap: () => _handleCellTap(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF2196F3).withValues(alpha: 0.2)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF2196F3)
+                : isPattern
+                    ? (display?.color ?? const Color(0xFF4CAF50)).withValues(alpha: 0.4)
+                    : const Color(0xFFE5D5CC),
+            width: isSelected ? 3 : 2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF2196F3).withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: isSelected
+              ? const Icon(Icons.check, color: Color(0xFF2196F3), size: 32)
+              : display != null
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Opacity(
+                        opacity: 0.35,
+                        child: CustomPaint(
+                          painter: _ShapePainter(
+                            shape: display.shape,
+                            color: isPattern ? display.color : Colors.grey,
+                          ),
+                          size: const Size.square(40),
+                        ),
+                      ),
+                    )
+                  : null,
         ),
       ),
     );
@@ -714,17 +952,13 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        color: const Color(0xFF8E24AA).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.stars,
-            color: Color(0xFF4CAF50),
-            size: 24,
-          ),
+          const Icon(Icons.stars, color: Color(0xFF8E24AA), size: 24),
           const SizedBox(width: 8),
           const Text(
             'Score: ',
@@ -739,11 +973,116 @@ class _PatternMemoryTestScreenState extends State<PatternMemoryTestScreen>
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF4CAF50),
+              color: Color(0xFF8E24AA),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _ShapePainter extends CustomPainter {
+  final PatternShape shape;
+  final Color color;
+
+  _ShapePainter({required this.shape, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 2;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final r = min(size.width, size.height) * 0.4;
+
+    switch (shape) {
+      case PatternShape.circle:
+        canvas.drawCircle(center, r, paint);
+        break;
+      case PatternShape.triangle:
+        _drawTriangle(canvas, center, r, paint);
+        break;
+      case PatternShape.diamond:
+        _drawDiamond(canvas, center, r, paint);
+        break;
+      case PatternShape.star:
+        _drawStar(canvas, center, r, paint);
+        break;
+      case PatternShape.hexagon:
+        _drawPolygon(canvas, center, r, 6, paint);
+        break;
+      case PatternShape.square:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: center,
+              width: r * 1.6,
+              height: r * 1.6,
+            ),
+            const Radius.circular(3),
+          ),
+          paint,
+        );
+        break;
+    }
+  }
+
+  void _drawTriangle(Canvas canvas, Offset c, double r, Paint p) {
+    final path = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..lineTo(c.dx - r * 0.866, c.dy + r * 0.5)
+      ..lineTo(c.dx + r * 0.866, c.dy + r * 0.5)
+      ..close();
+    canvas.drawPath(path, p);
+  }
+
+  void _drawDiamond(Canvas canvas, Offset c, double r, Paint p) {
+    final path = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..lineTo(c.dx + r, c.dy)
+      ..lineTo(c.dx, c.dy + r)
+      ..lineTo(c.dx - r, c.dy)
+      ..close();
+    canvas.drawPath(path, p);
+  }
+
+  void _drawStar(Canvas canvas, Offset c, double r, Paint p) {
+    final path = Path();
+    for (int i = 0; i < 10; i++) {
+      final angle = -pi / 2 + i * pi / 5;
+      final rad = i.isEven ? r : r * 0.45;
+      final x = c.dx + rad * cos(angle);
+      final y = c.dy + rad * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, p);
+  }
+
+  void _drawPolygon(Canvas canvas, Offset c, double r, int sides, Paint p) {
+    final path = Path();
+    for (int i = 0; i < sides; i++) {
+      final angle = -pi / 2 + i * 2 * pi / sides;
+      final x = c.dx + r * cos(angle);
+      final y = c.dy + r * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_ShapePainter oldDelegate) =>
+      oldDelegate.shape != shape || oldDelegate.color != color;
 }

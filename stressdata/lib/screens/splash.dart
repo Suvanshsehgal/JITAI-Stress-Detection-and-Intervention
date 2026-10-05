@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../core/theme/colors.dart';
-import 'Login.dart';
-import 'Register.dart';
+import 'login.dart';
+import 'register.dart';
 import 'terms_conditions_screen.dart';
 import '../widget/custom_button.dart';
 

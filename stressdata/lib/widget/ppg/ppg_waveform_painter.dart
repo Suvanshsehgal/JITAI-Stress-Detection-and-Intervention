@@ -49,7 +49,7 @@ class PPGWaveformPainter extends CustomPainter {
 
     // Draw baseline
     final baselinePaint = Paint()
-      ..color = waveColor.withOpacity(0.2)
+      ..color = waveColor.withValues(alpha: 0.2)
       ..strokeWidth = 1.0;
     
     canvas.drawLine(

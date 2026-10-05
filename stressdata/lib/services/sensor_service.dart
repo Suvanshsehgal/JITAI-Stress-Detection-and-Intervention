@@ -95,7 +95,7 @@ class SensorService {
     }
 
     final metrics = _computeFeatures();
-    debugPrint('✅ Computed sensor metrics for ${_currentPhase}:');
+    debugPrint('✅ Computed sensor metrics for $_currentPhase:');
     debugPrint('   Movement intensity: ${metrics.movementIntensity.toStringAsFixed(3)}');
     debugPrint('   Activity level: ${metrics.activityLevel}');
     debugPrint('   Hesitations: ${metrics.hesitationCount}');

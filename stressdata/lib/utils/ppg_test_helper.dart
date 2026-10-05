@@ -80,7 +80,7 @@ class PPGTestHelper {
 
   /// Hex string version — kept for callers that need a raw string (e.g. web).
   static String qualityColorHex(SignalQuality quality) {
-    return '#${qualityColor(quality).value.toRadixString(16).substring(2).toUpperCase()}';
+    return '#${qualityColor(quality).toARGB32().toRadixString(16).substring(2).toUpperCase()}';
   }
 
   /// Expected total session duration.
