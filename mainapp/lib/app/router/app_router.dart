@@ -13,9 +13,18 @@ import '../../features/profile/profile_screen.dart';
 import '../../features/health/health_screen.dart';
 import '../../features/garden/garden_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../widgets/app_shell.dart';
+
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final _shellNavigatorHomeKey = GlobalKey<NavigatorState>(debugLabel: 'home');
+final _shellNavigatorBuddyKey = GlobalKey<NavigatorState>(debugLabel: 'buddy');
+final _shellNavigatorToolboxKey = GlobalKey<NavigatorState>(debugLabel: 'toolbox');
+final _shellNavigatorInsightsKey = GlobalKey<NavigatorState>(debugLabel: 'insights');
+final _shellNavigatorProfileKey = GlobalKey<NavigatorState>(debugLabel: 'profile');
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
     redirect: (context, state) {
       final prefs = ref.read(sharedPreferencesProvider);
@@ -40,44 +49,81 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
       GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
         path: '/onboarding',
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
-        path: '/buddy',
-        builder: (context, state) => const BuddyScreen(),
-      ),
-      GoRoute(
-        path: '/toolbox',
-        builder: (context, state) => const ToolboxScreen(),
-      ),
-      GoRoute(
         path: '/sos',
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SosScreen(),
       ),
       GoRoute(
-        path: '/insights',
-        builder: (context, state) => const InsightsScreen(),
-      ),
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
-      ),
-      GoRoute(
         path: '/health',
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const HealthScreen(),
       ),
       GoRoute(
         path: '/garden',
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const GardenScreen(),
       ),
       GoRoute(
         path: '/settings',
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SettingsScreen(),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return AppShell(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorHomeKey,
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorBuddyKey,
+            routes: [
+              GoRoute(
+                path: '/buddy',
+                builder: (context, state) => const BuddyScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorToolboxKey,
+            routes: [
+              GoRoute(
+                path: '/toolbox',
+                builder: (context, state) => const ToolboxScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorInsightsKey,
+            routes: [
+              GoRoute(
+                path: '/insights',
+                builder: (context, state) => const InsightsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorProfileKey,
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
