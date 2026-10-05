@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../providers/home_provider.dart';
+import '../../toolbox/providers/intervention_provider.dart';
 import '../../../shared/widgets/ebb_card.dart';
 import '../../../shared/widgets/ebb_button.dart';
 
@@ -11,9 +12,9 @@ class SuggestedActionWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final action = ref.watch(homeProvider).suggestedAction;
+    final intervention = ref.watch(recommendationProvider);
 
-    if (action == null) return const SizedBox.shrink();
+    if (intervention == null) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,7 +34,7 @@ class SuggestedActionWidget extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      action.title,
+                      intervention.title,
                       style: theme.textTheme.titleLarge,
                     ),
                   ),
@@ -44,7 +45,7 @@ class SuggestedActionWidget extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      action.duration,
+                      intervention.duration,
                       style: theme.textTheme.labelSmall,
                     ),
                   ),
@@ -52,7 +53,7 @@ class SuggestedActionWidget extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                action.description,
+                intervention.description,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -63,10 +64,7 @@ class SuggestedActionWidget extends ConsumerWidget {
                 child: EbbButton(
                   label: 'Start Session',
                   onPressed: () {
-                    // Placeholder action
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Intervention engine not yet implemented.')),
-                    );
+                    context.push('/intervention/${intervention.id}');
                   },
                 ),
               ),
