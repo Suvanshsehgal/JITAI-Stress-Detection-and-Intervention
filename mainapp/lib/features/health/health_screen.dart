@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/widgets/ebb_card.dart';
+import '../stress_detection/widgets/stress_assessment_card.dart';
 import 'models/health_permission.dart';
 import 'providers/health_providers.dart';
 import 'widgets/context_summary_card.dart';
@@ -60,6 +61,8 @@ class HealthScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               const ContextSummaryCard(),
+              const SizedBox(height: 16),
+              const StressAssessmentCard(),
               const SizedBox(height: 24),
               Text(
                 'Connected Sources',
