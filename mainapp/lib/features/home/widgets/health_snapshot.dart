@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../health/models/data_quality.dart';
+import '../../health/models/health_permission.dart';
+import '../../health/providers/health_providers.dart';
 import '../providers/home_provider.dart';
 import '../../../shared/widgets/ebb_card.dart';
 
@@ -10,7 +13,47 @@ class HealthSnapshotWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final snapshot = ref.watch(homeProvider).healthSnapshot;
+    final fallback = ref.watch(homeProvider).healthSnapshot;
+    final snapshotAsync = ref.watch(contextSnapshotProvider);
+
+    final hrValue = snapshotAsync.maybeWhen(
+      data: (s) {
+        if (s.getStatusFor(HealthDataType.heartRate) == DataQualityStatus.disabled) {
+          return 'Disabled';
+        }
+        if (s.heartRate != null) {
+          return '${s.heartRate!.bpm.round()} bpm';
+        }
+        return fallback.heartRate != null ? '${fallback.heartRate} bpm' : '--';
+      },
+      orElse: () => fallback.heartRate != null ? '${fallback.heartRate} bpm' : '--',
+    );
+
+    final hrvValue = snapshotAsync.maybeWhen(
+      data: (s) {
+        if (s.getStatusFor(HealthDataType.hrv) == DataQualityStatus.disabled) {
+          return 'Disabled';
+        }
+        if (s.hrv != null) {
+          return '${s.hrv!.rmssdMs.round()} ms';
+        }
+        return fallback.hrv != null ? '${fallback.hrv} ms' : '--';
+      },
+      orElse: () => fallback.hrv != null ? '${fallback.hrv} ms' : '--',
+    );
+
+    final sleepValue = snapshotAsync.maybeWhen(
+      data: (s) {
+        if (s.getStatusFor(HealthDataType.sleep) == DataQualityStatus.disabled) {
+          return 'Disabled';
+        }
+        if (s.sleep != null) {
+          return s.sleep!.formattedDuration;
+        }
+        return fallback.sleep ?? '--';
+      },
+      orElse: () => fallback.sleep ?? '--',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -26,7 +69,7 @@ class HealthSnapshotWidget extends ConsumerWidget {
               child: _buildMetricCard(
                 context, 
                 'HR', 
-                snapshot.heartRate != null ? '${snapshot.heartRate} bpm' : '--',
+                hrValue,
                 Icons.favorite_border,
               ),
             ),
@@ -35,7 +78,7 @@ class HealthSnapshotWidget extends ConsumerWidget {
               child: _buildMetricCard(
                 context, 
                 'HRV', 
-                snapshot.hrv != null ? '${snapshot.hrv} ms' : '--',
+                hrvValue,
                 Icons.monitor_heart_outlined,
               ),
             ),
@@ -44,7 +87,7 @@ class HealthSnapshotWidget extends ConsumerWidget {
               child: _buildMetricCard(
                 context, 
                 'Sleep', 
-                snapshot.sleep ?? '--',
+                sleepValue,
                 Icons.bedtime_outlined,
               ),
             ),

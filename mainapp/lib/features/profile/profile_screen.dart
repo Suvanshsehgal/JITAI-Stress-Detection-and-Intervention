@@ -79,6 +79,20 @@ class ProfileScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              EbbCard(
+                padding: EdgeInsets.zero,
+                child: ListTile(
+                  leading: Icon(
+                    Icons.favorite_outline,
+                    color: theme.colorScheme.primary,
+                  ),
+                  title: const Text('Health & Context Signals'),
+                  subtitle: const Text('Manage data sources and permissions'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/health'),
+                ),
+              ),
             ],
           ),
         ),
