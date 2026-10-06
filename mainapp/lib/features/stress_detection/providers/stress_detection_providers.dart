@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/shared_prefs_provider.dart';
 import '../../health/providers/health_providers.dart';
+import '../../../core/auth/auth_provider.dart';
+import '../../jitai/providers/jitai_providers.dart';
 import '../models/stress_assessment.dart';
 import '../repositories/stress_assessment_repository.dart';
 import '../services/mock_stress_detection_service.dart';
+import '../services/remote_stress_detection_service.dart';
 import '../services/stress_detection_service.dart';
 
 final stressAssessmentRepositoryProvider =
@@ -12,8 +15,22 @@ final stressAssessmentRepositoryProvider =
   return LocalStressAssessmentRepository(prefs);
 });
 
-final stressDetectionServiceProvider = Provider<StressDetectionService>((ref) {
+final mockStressDetectionServiceProvider = Provider<MockStressDetectionService>((ref) {
   return MockStressDetectionService();
+});
+
+final remoteStressDetectionServiceProvider = Provider<RemoteStressDetectionService>((ref) {
+  final client = ref.watch(apiClientProvider);
+  final mock = ref.watch(mockStressDetectionServiceProvider);
+  return RemoteStressDetectionService(apiClient: client, mockFallback: mock);
+});
+
+final stressDetectionServiceProvider = Provider<StressDetectionService>((ref) {
+  final useRemote = ref.watch(useRemoteBackendProvider);
+  if (useRemote) {
+    return ref.watch(remoteStressDetectionServiceProvider);
+  }
+  return ref.watch(mockStressDetectionServiceProvider);
 });
 
 class StressDetectionState {
