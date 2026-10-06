@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:uuid/uuid.dart';
+import '../../insights/providers/mood_provider.dart';
+import '../../insights/models/mood_entry.dart';
 import '../providers/home_provider.dart';
 import '../../../shared/widgets/ebb_card.dart';
 
@@ -37,6 +40,18 @@ class MoodCheckInWidget extends ConsumerWidget {
               return GestureDetector(
                 onTap: () {
                   ref.read(homeProvider.notifier).setMood(mood['label']);
+                  
+                  // Map label to 1-5 value
+                  final valMap = {'Low': 1, 'Unsettled': 2, 'Okay': 3, 'Good': 4, 'Great': 5};
+                  final val = valMap[mood['label']] ?? 3;
+                  
+                  ref.read(moodProvider.notifier).addMood(
+                    MoodEntry(
+                      id: const Uuid().v4(),
+                      moodValue: val,
+                      timestamp: DateTime.now(),
+                    )
+                  );
                 },
                 behavior: HitTestBehavior.opaque,
                 child: AnimatedContainer(
