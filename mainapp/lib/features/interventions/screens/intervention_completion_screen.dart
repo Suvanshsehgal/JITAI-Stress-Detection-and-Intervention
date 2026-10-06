@@ -143,50 +143,60 @@ class _InterventionCompletionScreenState
                         final color = item['color'] as Color;
                         final isSelected = _selectedMood == label;
 
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedMood = isSelected ? null : label;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? theme.colorScheme.primaryContainer
-                                  : theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.outlineVariant,
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  icon,
-                                  color: isSelected ? theme.colorScheme.primary : color,
-                                  size: 28,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  label,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _selectedMood = isSelected ? null : label;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? theme.colorScheme.primaryContainer
+                                      : theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
                                     color: isSelected
                                         ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurfaceVariant,
+                                        : theme.colorScheme.outlineVariant,
+                                    width: isSelected ? 2 : 1,
                                   ),
                                 ),
-                              ],
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      icon,
+                                      color: isSelected
+                                          ? theme.colorScheme.primary
+                                          : color,
+                                      size: 26,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        label,
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSelected
+                                              ? theme.colorScheme.primary
+                                              : theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         );

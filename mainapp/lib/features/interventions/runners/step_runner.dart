@@ -122,7 +122,10 @@ class _StepRunnerState extends State<StepRunner> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: _prev,
-                          child: const Text('Previous'),
+                          child: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Previous', maxLines: 1),
+                          ),
                         ),
                       ),
                     if (_currentStep > 0) const SizedBox(width: 16),

@@ -107,27 +107,29 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Remote Backend & ML',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Remote Backend & ML',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                            Text(
-                              useRemoteBackend
-                                  ? 'Active (FastAPI + Stride ML)'
-                                  : 'Offline / Mock Only',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                              Text(
+                                useRemoteBackend
+                                    ? 'Active (FastAPI + Stride ML)'
+                                    : 'Offline / Mock Only',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Switch(
                           value: useRemoteBackend,
                           onChanged: (val) {
@@ -138,26 +140,32 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const Divider(height: 24),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Interventions Database',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Interventions Database',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                            Text(
-                              'Supabase PostgreSQL sync',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                              Text(
+                                'Supabase PostgreSQL sync',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                          ),
                           onPressed: syncState == SyncStateStatus.syncing
                               ? null
                               : () async {
@@ -179,15 +187,16 @@ class ProfileScreen extends ConsumerWidget {
                                 },
                           icon: syncState == SyncStateStatus.syncing
                               ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
+                                  width: 14,
+                                  height: 14,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Icon(Icons.sync, size: 18),
+                              : const Icon(Icons.sync, size: 16),
                           label: Text(
                             syncState == SyncStateStatus.syncing
                                 ? 'Syncing...'
                                 : 'Sync Now',
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
                       ],
@@ -269,18 +278,23 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildPrefRow(ThemeData theme, String label, String value) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],

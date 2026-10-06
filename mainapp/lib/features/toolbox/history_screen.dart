@@ -100,11 +100,6 @@ class HistoryScreen extends ConsumerWidget {
                     );
 
                 final title = intervention?.title ?? session.interventionId;
-                final finishTime = session.completedAt ?? session.startedAt;
-                final durationMinutes = finishTime
-                    .difference(session.startedAt)
-                    .inMinutes
-                    .clamp(1, 120);
 
                 return Card(
                   elevation: 0,

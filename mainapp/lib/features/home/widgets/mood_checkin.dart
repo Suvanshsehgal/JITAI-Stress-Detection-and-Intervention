@@ -37,42 +37,49 @@ class MoodCheckInWidget extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: moods.map((mood) {
               final isSelected = selectedMood == mood['label'];
-              return GestureDetector(
-                onTap: () {
-                  ref.read(homeProvider.notifier).setMood(mood['label']);
-                  
-                  // Map label to 1-5 value
-                  final valMap = {'Low': 1, 'Unsettled': 2, 'Okay': 3, 'Good': 4, 'Great': 5};
-                  final val = valMap[mood['label']] ?? 3;
-                  
-                  ref.read(moodProvider.notifier).addMood(
-                    MoodEntry(
-                      id: const Uuid().v4(),
-                      moodValue: val,
-                      timestamp: DateTime.now(),
-                    )
-                  );
-                },
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? theme.colorScheme.primaryContainer : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(mood['emoji'], style: const TextStyle(fontSize: 28)),
-                      const SizedBox(height: 4),
-                      Text(
-                        mood['label'],
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isSelected ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    ref.read(homeProvider.notifier).setMood(mood['label']);
+                    
+                    // Map label to 1-5 value
+                    final valMap = {'Low': 1, 'Unsettled': 2, 'Okay': 3, 'Good': 4, 'Great': 5};
+                    final val = valMap[mood['label']] ?? 3;
+                    
+                    ref.read(moodProvider.notifier).addMood(
+                      MoodEntry(
+                        id: const Uuid().v4(),
+                        moodValue: val,
+                        timestamp: DateTime.now(),
+                      )
+                    );
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? theme.colorScheme.primaryContainer : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(mood['emoji'], style: const TextStyle(fontSize: 26)),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            mood['label'],
+                            maxLines: 1,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: isSelected ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

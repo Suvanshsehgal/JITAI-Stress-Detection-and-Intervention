@@ -164,7 +164,13 @@ class SuggestedActionWidget extends ConsumerWidget {
                         onPressed: () {
                           notifier.dismissRecommendation();
                         },
-                        child: const Text('Not Now'),
+                        child: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Not Now',
+                            maxLines: 1,
+                          ),
+                        ),
                       ),
                     ),
                   ],
