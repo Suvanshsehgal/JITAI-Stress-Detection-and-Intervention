@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../jitai/providers/jitai_providers.dart';
 import '../models/intervention.dart';
 
 final interventionCatalogProvider = Provider<List<Intervention>>((ref) {
@@ -88,7 +89,15 @@ final interventionCatalogProvider = Provider<List<Intervention>>((ref) {
 });
 
 final recommendationProvider = Provider<Intervention?>((ref) {
-  // Deterministic mock recommendation for Phase 4
+  final jitaiState = ref.watch(jitaiRecommendationNotifierProvider);
   final catalog = ref.watch(interventionCatalogProvider);
+  if (jitaiState.activeRecommendation != null) {
+    try {
+      return catalog.firstWhere(
+        (i) => i.id == jitaiState.activeRecommendation!.interventionId,
+      );
+    } catch (_) {}
+  }
+  // Default fallback for steady state
   return catalog.firstWhere((i) => i.id == 'box-breathing');
 });
