@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/theme/app_colors.dart';
 import '../../shared/widgets/ebb_card.dart';
 import '../stress_detection/widgets/stress_assessment_card.dart';
 import 'models/health_permission.dart';
 import 'providers/health_providers.dart';
+import 'services/watch_service.dart';
 import 'widgets/context_summary_card.dart';
 import 'widgets/data_source_status_card.dart';
 
@@ -38,6 +41,10 @@ class HealthScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('Health & Context Data'),
       ),
       body: SafeArea(
@@ -63,6 +70,65 @@ class HealthScreen extends ConsumerWidget {
               const ContextSummaryCard(),
               const SizedBox(height: 16),
               const StressAssessmentCard(),
+              const SizedBox(height: 24),
+              Text(
+                'Smartwatch Connection',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Consumer(
+                builder: (context, ref, _) {
+                  final watch = ref.watch(watchServiceProvider);
+                  final isConnected = watch.status == WatchStatus.connected;
+                  final current = watch.current;
+
+                  return EbbCard(
+                    onTap: () => context.push('/watch'),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isConnected ? AppColors.lightCalmSoft : AppColors.lightAccentSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.watch_rounded,
+                            color: isConnected ? AppColors.lightCalm : AppColors.lightAccent,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Fireboltt BLE Smartwatch',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isConnected
+                                    ? 'Active: ${current?.bpm ?? "--"} BPM'
+                                    : 'Tap to scan, pair & stream live HR',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isConnected ? AppColors.lightCalm : AppColors.lightTextSecondary,
+                                  fontWeight: isConnected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 24),
               Text(
                 'Connected Sources',
