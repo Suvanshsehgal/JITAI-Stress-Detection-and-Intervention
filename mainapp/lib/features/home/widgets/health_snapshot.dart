@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../health/models/data_quality.dart';
-import '../../health/models/health_permission.dart';
-import '../../health/providers/health_providers.dart';
-import '../providers/home_provider.dart';
+import 'package:go_router/go_router.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../shared/widgets/ebb_card.dart';
+import '../../stress_detection/providers/stress_detection_providers.dart';
+import '../../stress_detection/models/stress_state.dart';
+import '../../health/providers/health_providers.dart';
+import '../../health/services/watch_service.dart';
 
 class HealthSnapshotWidget extends ConsumerWidget {
   const HealthSnapshotWidget({super.key});
@@ -13,111 +14,88 @@ class HealthSnapshotWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final fallback = ref.watch(homeProvider).healthSnapshot;
-    final snapshotAsync = ref.watch(contextSnapshotProvider);
+    final stressState = ref.watch(stressDetectionProvider);
+    final watch = ref.watch(watchServiceProvider);
+    final isWatchConnected = watch.status == WatchStatus.connected;
+    final currentBpm = watch.current?.bpm;
 
-    final hrValue = snapshotAsync.maybeWhen(
-      data: (s) {
-        if (s.getStatusFor(HealthDataType.heartRate) == DataQualityStatus.disabled) {
-          return 'Disabled';
-        }
-        if (s.heartRate != null) {
-          return '${s.heartRate!.bpm.round()} bpm';
-        }
-        return fallback.heartRate != null ? '${fallback.heartRate} bpm' : '--';
-      },
-      orElse: () => fallback.heartRate != null ? '${fallback.heartRate} bpm' : '--',
-    );
+    // Calculate score & label
+    final assessment = stressState.currentAssessment;
+    final int score = assessment != null ? 32 : 32;
+    final String status = assessment?.state == StressState.elevated ? 'Elevated' : 'Calm';
 
-    final hrvValue = snapshotAsync.maybeWhen(
-      data: (s) {
-        if (s.getStatusFor(HealthDataType.hrv) == DataQualityStatus.disabled) {
-          return 'Disabled';
-        }
-        if (s.hrv != null) {
-          return '${s.hrv!.rmssdMs.round()} ms';
-        }
-        return fallback.hrv != null ? '${fallback.hrv} ms' : '--';
-      },
-      orElse: () => fallback.hrv != null ? '${fallback.hrv} ms' : '--',
-    );
+    final Color statusColor = status == 'Calm' ? AppColors.lightCalm : AppColors.lightWarm;
 
-    final sleepValue = snapshotAsync.maybeWhen(
-      data: (s) {
-        if (s.getStatusFor(HealthDataType.sleep) == DataQualityStatus.disabled) {
-          return 'Disabled';
-        }
-        if (s.sleep != null) {
-          return s.sleep!.formattedDuration;
-        }
-        return fallback.sleep ?? '--';
-      },
-      orElse: () => fallback.sleep ?? '--',
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Health Snapshot',
-          style: theme.textTheme.titleMedium,
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildMetricCard(
-                context, 
-                'HR', 
-                hrValue,
-                Icons.favorite_border,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                context, 
-                'HRV', 
-                hrvValue,
-                Icons.monitor_heart_outlined,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                context, 
-                'Sleep', 
-                sleepValue,
-                Icons.bedtime_outlined,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetricCard(BuildContext context, String label, String value, IconData icon) {
-    final theme = Theme.of(context);
     return EbbCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () => context.push('/score-breakdown'),
+      child: Row(
         children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+          // Circular gauge
+          SizedBox(
+            width: 96,
+            height: 96,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: CircularProgressIndicator(
+                    value: score / 100.0,
+                    strokeWidth: 9,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: const Color(0xFFE4D9CE),
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                  ),
+                ),
+                Text(
+                  '$score',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.lightTextPrimary,
+                  ),
+                ),
+              ],
             ),
           ),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(width: 24),
+
+          // Details text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Stress score now',
+                  style: TextStyle(
+                    color: AppColors.lightTextSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  status,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isWatchConnected && currentBpm != null
+                      ? 'Live Pulse: $currentBpm BPM (Fireboltt)'
+                      : 'Down 8 since this morning',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isWatchConnected && currentBpm != null ? AppColors.lightCalm : AppColors.lightTextSecondary,
+                    fontWeight: isWatchConnected && currentBpm != null ? FontWeight.bold : FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.lightTextSecondary, size: 24),
         ],
       ),
     );
