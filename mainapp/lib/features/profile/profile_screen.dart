@@ -1,274 +1,244 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_radius.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../shared/widgets/ebb_card.dart';
-import '../insights/providers/baseline_provider.dart';
-import '../jitai/providers/jitai_providers.dart';
-import '../onboarding/providers/onboarding_provider.dart';
-import '../sync/providers/sync_provider.dart';
-import '../sync/services/sync_service.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  bool _darkMode = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final onboardingState = ref.watch(onboardingProvider);
-    final baseline = ref.watch(baselineProvider);
     final authState = ref.watch(authProvider);
-    final useRemoteBackend = ref.watch(useRemoteBackendProvider);
-    final syncState = ref.watch(syncProvider);
+
+    final userName = (authState.username != null && authState.username!.isNotEmpty)
+        ? authState.username!
+        : 'Aarav Mehta';
+
+    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'A';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('You'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () => context.push('/settings'),
-          ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Profile'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // User Header Card
-              EbbCard(
+              // Avatar
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFBA68C8), Color(0xFFF48FB1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFBA68C8).withAlpha(80),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 40,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Text(
+                userName,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Using Stillpoint since Oct 2026',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Study linked badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: AppRadius.pill,
+                  border: Border.all(color: AppColors.lightBorder),
+                ),
                 child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 32,
-                      backgroundColor: theme.colorScheme.primaryContainer,
-                      child: Text(
-                        ((authState.username != null && authState.username!.isNotEmpty)
-                                ? authState.username![0]
-                                : 'U')
-                            .toUpperCase(),
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            (authState.username != null && authState.username!.isNotEmpty)
-                                ? authState.username!
-                                : 'Guest User',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Buddy: ${onboardingState.buddyName} (${onboardingState.tone.name})',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Cloud Sync & Backend Card
-              EbbCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.cloud_sync_outlined,
-                          color: theme.colorScheme.primary,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Cloud & ML Integration',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Remote Backend & ML',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                useRemoteBackend
-                                    ? 'Active (FastAPI + Stride ML)'
-                                    : 'Offline / Mock Only',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Switch(
-                          value: useRemoteBackend,
-                          onChanged: (val) {
-                            ref.read(useRemoteBackendProvider.notifier).state = val;
-                          },
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Interventions Database',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                'Supabase PostgreSQL sync',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                          ),
-                          onPressed: syncState == SyncStateStatus.syncing
-                              ? null
-                              : () async {
-                                  final count = await ref
-                                      .read(syncProvider.notifier)
-                                      .syncNow();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          count > 0
-                                              ? 'Synced $count intervention response(s) to cloud.'
-                                              : 'All records are in sync.',
-                                        ),
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
-                                },
-                          icon: syncState == SyncStateStatus.syncing
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.sync, size: 16),
-                          label: Text(
-                            syncState == SyncStateStatus.syncing
-                                ? 'Syncing...'
-                                : 'Sync Now',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Baseline & System Status
-              EbbCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.circle, color: AppColors.lightCalm, size: 8),
+                    SizedBox(width: 8),
                     Text(
-                      'System Intelligence',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildPrefRow(
-                      theme,
-                      'Baseline Learning',
-                      baseline.progressPercent >= 1.0
-                          ? 'Established'
-                          : '${(baseline.progressPercent * 100).toInt()}% Complete',
-                    ),
-                    const Divider(height: 24),
-                    _buildPrefRow(
-                      theme,
-                      'Cooldown Enforced',
-                      '15 minutes between nudges',
-                    ),
-                    const Divider(height: 24),
-                    _buildPrefRow(
-                      theme,
-                      'Calendar Shield',
-                      'Suppresses nudges during meetings',
+                      'Linked to StressLab P-0142',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Link to Health & Context Screen
-              EbbCard(
-                padding: EdgeInsets.zero,
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withAlpha(120),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.favorite_rounded,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  title: const Text(
-                    'Health & Context Signals',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Manage wearable inputs & privacy'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.push('/health'),
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Stats Row (Avg score, Best streak, Resets tried)
+              EbbCard(
+                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatColumn('38', 'Avg score', AppColors.lightAccent),
+                    Container(height: 36, width: 1, color: AppColors.lightBorder),
+                    _buildStatColumn('9', 'Best streak', AppColors.lightAccent),
+                    Container(height: 36, width: 1, color: AppColors.lightBorder),
+                    _buildStatColumn('12', 'Resets tried', AppColors.lightAccent),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Navigation List Card
+              EbbCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.lightAccentSoft, shape: BoxShape.circle),
+                        child: const Icon(Icons.emoji_events_rounded, color: AppColors.lightAccent, size: 20),
+                      ),
+                      title: const Text('Goals and badges', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('4 of 5 resets this week'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => context.push('/goals-badges'),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.lightAccentSoft, shape: BoxShape.circle),
+                        child: const Icon(Icons.menu_book_rounded, color: AppColors.lightAccent, size: 20),
+                      ),
+                      title: const Text('Journal', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('12 entries'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => context.push('/journal'),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.lightAccentSoft, shape: BoxShape.circle),
+                        child: const Icon(Icons.notifications_rounded, color: AppColors.lightAccent, size: 20),
+                      ),
+                      title: const Text('Nudge settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Balanced, 3 a day'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => context.push('/nudge-settings'),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.lightAccentSoft, shape: BoxShape.circle),
+                        child: const Icon(Icons.call_rounded, color: AppColors.lightAccent, size: 20),
+                      ),
+                      title: const Text('Support and helplines', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Reach a person any time'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => context.push('/support'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Preferences Card
+              EbbCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(color: AppColors.lightPaper, shape: BoxShape.circle),
+                        child: const Icon(Icons.nightlight_round, size: 20, color: AppColors.lightTextSecondary),
+                      ),
+                      title: const Text('Dark mode', style: TextStyle(fontWeight: FontWeight.bold)),
+                      value: _darkMode,
+                      activeColor: AppColors.lightAccent,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (val) => setState(() => _darkMode = val),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(color: AppColors.lightPaper, shape: BoxShape.circle),
+                        child: const Icon(Icons.shield_outlined, size: 20, color: AppColors.lightTextSecondary),
+                      ),
+                      title: const Text('Data and privacy', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Linked study data & context signals'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => context.push('/health'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Log out button
+              TextButton(
+                onPressed: () async {
+                  await ref.read(authProvider.notifier).logout();
+                  if (context.mounted) {
+                    context.go('/login');
+                  }
+                },
+                child: const Text(
+                  'Log out',
+                  style: TextStyle(
+                    color: AppColors.lightRose,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -276,25 +246,24 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPrefRow(ThemeData theme, String label, String value) {
-    return Row(
+  Widget _buildStatColumn(String val, String label, Color color) {
+    return Column(
       children: [
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+        Text(
+          val,
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            color: color,
           ),
         ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.lightTextSecondary,
           ),
         ),
       ],

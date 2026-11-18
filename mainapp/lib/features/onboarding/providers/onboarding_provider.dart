@@ -1,17 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/auth/auth_provider.dart';
 import '../../../core/providers/shared_prefs_provider.dart';
+import '../../../core/supabase/supabase_auth_service.dart';
 import '../models/onboarding_state.dart';
 
 final onboardingProvider = StateNotifierProvider<OnboardingNotifier, OnboardingState>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-  return OnboardingNotifier(prefs);
+  final auth = ref.watch(supabaseAuthProvider);
+  return OnboardingNotifier(prefs, auth);
 });
 
 class OnboardingNotifier extends StateNotifier<OnboardingState> {
   final SharedPreferences _prefs;
+  final SupabaseAuthService _auth;
 
-  OnboardingNotifier(this._prefs) : super(const OnboardingState()) {
+  OnboardingNotifier(this._prefs, this._auth) : super(const OnboardingState()) {
     _loadState();
   }
 
@@ -73,5 +77,25 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     await _prefs.setStringList('onboardingGoals', state.goals.toList());
     await _prefs.setStringList('onboardingDataPrefs', state.dataPrefs.toList());
     await _prefs.setBool('onboardingCompleted', true);
+
+    // Best effort: mirror onboarding to the signed-in user's profile.
+    try {
+      final session = await _auth.currentSession();
+      if (session != null) {
+        await _auth.update(
+          'profiles',
+          filter: 'id=eq.${session.userId}',
+          row: {
+            'buddy_name': finalName,
+            'buddy_tone': state.tone.name,
+            'goals': state.goals.toList(),
+            'onboarding_completed': true,
+          },
+          token: session.accessToken,
+        );
+      }
+    } catch (_) {
+      // Offline or guest: onboarding still completes locally.
+    }
   }
 }

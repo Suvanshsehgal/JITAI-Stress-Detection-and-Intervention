@@ -6,7 +6,7 @@ import 'core/providers/shared_prefs_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final sharedPrefs = await SharedPreferences.getInstance();
   
   runApp(
