@@ -18,6 +18,10 @@ class HistoryScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('Session History'),
         actions: [
           IconButton(

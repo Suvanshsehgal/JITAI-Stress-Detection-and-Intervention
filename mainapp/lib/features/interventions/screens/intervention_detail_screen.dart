@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_radius.dart';
 import '../../toolbox/providers/intervention_provider.dart';
 import '../../../shared/widgets/ebb_button.dart';
 
@@ -28,6 +30,10 @@ class InterventionDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
+        ),
         title: Text(intervention.title),
       ),
       body: SafeArea(
@@ -35,20 +41,22 @@ class InterventionDetailScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(16),
+                        color: AppColors.lightAccentSoft,
+                        borderRadius: AppRadius.pill,
                       ),
                       child: Text(
-                        '${intervention.duration} • ${intervention.difficulty}',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: theme.colorScheme.onSecondaryContainer,
+                        '${intervention.duration} · ${intervention.difficulty}',
+                        style: const TextStyle(
+                          color: AppColors.lightAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -57,6 +65,7 @@ class InterventionDetailScreen extends ConsumerWidget {
                       'Purpose',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        fontSize: 18,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -64,6 +73,7 @@ class InterventionDetailScreen extends ConsumerWidget {
                       intervention.description,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.4,
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -71,6 +81,7 @@ class InterventionDetailScreen extends ConsumerWidget {
                       'Instructions',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        fontSize: 18,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -80,21 +91,31 @@ class InterventionDetailScreen extends ConsumerWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: theme.colorScheme.primaryContainer,
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: const BoxDecoration(
+                                color: AppColors.lightBrand,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
                               child: Text(
                                 '${e.key + 1}',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onPrimaryContainer,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 14),
                             Expanded(
                               child: Text(
                                 e.value,
-                                style: theme.textTheme.bodyLarge,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -106,13 +127,12 @@ class InterventionDetailScreen extends ConsumerWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: SizedBox(
                 width: double.infinity,
                 child: EbbButton(
                   label: 'Start Session',
                   onPressed: () {
-                    // Navigate to appropriate runner
                     context.replace('/intervention/$interventionId/run');
                   },
                 ),

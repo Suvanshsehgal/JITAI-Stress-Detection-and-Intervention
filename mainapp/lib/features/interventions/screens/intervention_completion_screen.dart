@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../shared/widgets/ebb_button.dart';
+import '../../../shared/widgets/ebb_card.dart';
 import '../../jitai/models/jitai_user_response.dart';
 import '../../jitai/providers/jitai_providers.dart';
 import '../../sync/providers/sync_provider.dart';
 import '../../toolbox/providers/session_history_provider.dart';
 import '../../toolbox/models/intervention_session.dart';
-import '../../../shared/widgets/ebb_button.dart';
-import '../../../shared/widgets/ebb_card.dart';
 
 class InterventionCompletionScreen extends ConsumerStatefulWidget {
   final String interventionId;
@@ -30,6 +31,14 @@ class _InterventionCompletionScreenState
   String? _selectedMood;
   final _uuid = const Uuid();
 
+  final List<Map<String, dynamic>> _moods = [
+    {'label': 'Great', 'color': Color(0xFF81C784), 'icon': Icons.sentiment_very_satisfied_rounded},
+    {'label': 'Good', 'color': Color(0xFFFFD54F), 'icon': Icons.sentiment_satisfied_rounded},
+    {'label': 'Okay', 'color': Color(0xFFD7CCC8), 'icon': Icons.sentiment_neutral_rounded},
+    {'label': 'Low', 'color': Color(0xFFFFB74D), 'icon': Icons.sentiment_dissatisfied_rounded},
+    {'label': 'Stressed', 'color': Color(0xFFBA68C8), 'icon': Icons.sentiment_very_dissatisfied_rounded},
+  ];
+
   void _finish() {
     final now = DateTime.now();
 
@@ -44,7 +53,7 @@ class _InterventionCompletionScreenState
     );
     ref.read(sessionHistoryProvider.notifier).saveSession(session);
 
-    // 2. Record response in JITAI repository for sync to backend/Supabase
+    // 2. Record response in JITAI repository
     final activeRec =
         ref.read(jitaiRecommendationNotifierProvider).activeRecommendation;
     final jitaiResponse = JitaiUserResponse(
@@ -58,146 +67,108 @@ class _InterventionCompletionScreenState
     );
     ref.read(jitaiResponseRepositoryProvider).recordResponse(jitaiResponse);
 
-    // 3. Trigger background sync attempt
+    // 3. Trigger cloud sync if online
     ref.read(syncProvider.notifier).syncNow();
 
-    // 4. Return to app
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/toolbox');
-    }
+    context.go('/home');
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final moods = [
-      {'label': 'Great', 'icon': Icons.sentiment_very_satisfied, 'color': Colors.teal},
-      {'label': 'Good', 'icon': Icons.sentiment_satisfied, 'color': Colors.green},
-      {'label': 'Okay', 'icon': Icons.sentiment_neutral, 'color': Colors.amber},
-      {'label': 'Struggling', 'icon': Icons.sentiment_dissatisfied, 'color': Colors.orange},
-      {'label': 'Bad', 'icon': Icons.sentiment_very_dissatisfied, 'color': Colors.redAccent},
-    ];
-
-    final durationSec =
-        DateTime.now().difference(widget.startedAt).inSeconds.clamp(1, 7200);
-    final durationMinutes = (durationSec / 60).ceil();
 
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Spacer(),
+              const Spacer(flex: 1),
+
+              // Celebration badge
               Container(
                 width: 100,
                 height: 100,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
+                  color: AppColors.lightCalmSoft,
                   shape: BoxShape.circle,
-                  color: theme.colorScheme.primaryContainer.withAlpha(160),
                 ),
-                child: Center(
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    size: 64,
-                    color: theme.colorScheme.primary,
-                  ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.lightCalm,
+                  size: 54,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
+
               Text(
-                'Great job.',
+                'Reset Complete',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
+                  fontSize: 28,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
-                'You dedicated ~$durationMinutes min to restore steady-state balance.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                'Taking even two minutes makes a difference for your nervous system.',
+                style: const TextStyle(
+                  color: AppColors.lightTextSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.4,
                 ),
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 36),
+
+              // Post-mood prompt
               EbbCard(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'How do you feel right now?',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: moods.map((item) {
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: _moods.map((item) {
                         final label = item['label'] as String;
-                        final icon = item['icon'] as IconData;
                         final color = item['color'] as Color;
+                        final icon = item['icon'] as IconData;
                         final isSelected = _selectedMood == label;
 
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                            child: InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _selectedMood = isSelected ? null : label;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(14),
-                              child: AnimatedContainer(
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedMood = label),
+                          child: Column(
+                            children: [
+                              AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 10),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? theme.colorScheme.primaryContainer
-                                      : theme.colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(14),
+                                  color: color.withAlpha(isSelected ? 255 : 80),
+                                  shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isSelected
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.outlineVariant,
-                                    width: isSelected ? 2 : 1,
+                                    color: isSelected ? AppColors.lightBrand : Colors.transparent,
+                                    width: 2.5,
                                   ),
                                 ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      icon,
-                                      color: isSelected
-                                          ? theme.colorScheme.primary
-                                          : color,
-                                      size: 26,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        label,
-                                        style: theme.textTheme.labelSmall?.copyWith(
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                          color: isSelected
-                                              ? theme.colorScheme.primary
-                                              : theme.colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                child: Icon(icon, color: isSelected ? Colors.white : AppColors.lightTextPrimary, size: 24),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  color: isSelected ? AppColors.lightTextPrimary : AppColors.lightTextSecondary,
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         );
                       }).toList(),
@@ -205,7 +176,9 @@ class _InterventionCompletionScreenState
                   ],
                 ),
               ),
-              const Spacer(),
+
+              const Spacer(flex: 2),
+
               SizedBox(
                 width: double.infinity,
                 child: EbbButton(

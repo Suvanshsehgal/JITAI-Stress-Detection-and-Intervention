@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_radius.dart';
 import '../../toolbox/models/intervention.dart';
 
 class BreathingRunner extends StatefulWidget {
@@ -14,16 +16,18 @@ class BreathingRunner extends StatefulWidget {
 
 class _BreathingRunnerState extends State<BreathingRunner> with SingleTickerProviderStateMixin {
   late final DateTime _startedAt;
-  
-  int _currentCycle = 0;
-  int _totalCycles = 5;
+
+  int _currentCycle = 1;
+  int _totalCycles = 4;
   int _phaseIndex = 0;
   int _phaseDurationMs = 4000;
-  
+  int _secondsLeftInPhase = 4;
+
   bool _isPaused = false;
-  Timer? _timer;
-  
+  Timer? _countdownTimer;
+
   late AnimationController _animController;
+  late Animation<double> _scaleAnimation;
 
   final List<String> _phases = ['Inhale', 'Hold', 'Exhale', 'Hold'];
 
@@ -31,8 +35,8 @@ class _BreathingRunnerState extends State<BreathingRunner> with SingleTickerProv
   void initState() {
     super.initState();
     _startedAt = DateTime.now();
-    
-    _totalCycles = widget.intervention.metadata['cycles'] as int? ?? 5;
+
+    _totalCycles = widget.intervention.metadata['cycles'] as int? ?? 4;
     _phaseDurationMs = widget.intervention.metadata['phaseDurationMs'] as int? ?? 4000;
 
     _animController = AnimationController(
@@ -40,12 +44,35 @@ class _BreathingRunnerState extends State<BreathingRunner> with SingleTickerProv
       duration: Duration(milliseconds: _phaseDurationMs),
     );
 
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.05).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
+    );
+
     _startPhase();
   }
 
   void _startPhase() {
-    _animController.forward(from: 0);
-    _timer = Timer(Duration(milliseconds: _phaseDurationMs), _onPhaseComplete);
+    _secondsLeftInPhase = (_phaseDurationMs / 1000).round();
+
+    if (_phases[_phaseIndex] == 'Inhale') {
+      _animController.forward(from: 0);
+    } else if (_phases[_phaseIndex] == 'Exhale') {
+      _animController.reverse(from: 1);
+    }
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (!_isPaused) {
+        setState(() {
+          _secondsLeftInPhase--;
+        });
+        if (_secondsLeftInPhase <= 0) {
+          timer.cancel();
+          _onPhaseComplete();
+        }
+      }
+    });
   }
 
   void _onPhaseComplete() {
@@ -59,66 +86,38 @@ class _BreathingRunnerState extends State<BreathingRunner> with SingleTickerProv
       }
     });
 
-    if (_currentCycle >= _totalCycles) {
+    if (_currentCycle > _totalCycles) {
       _finish();
     } else {
       _startPhase();
     }
   }
 
-  void _pauseOrResume() {
-    setState(() {
-      _isPaused = !_isPaused;
-    });
-
+  void _togglePause() {
+    setState(() => _isPaused = !_isPaused);
     if (_isPaused) {
-      _timer?.cancel();
       _animController.stop();
     } else {
-      final remainingMs = _phaseDurationMs - (_animController.value * _phaseDurationMs).round();
-      _animController.forward();
-      _timer = Timer(Duration(milliseconds: remainingMs), _onPhaseComplete);
-    }
-  }
-
-  Future<void> _handleExit() async {
-    _timer?.cancel();
-    _animController.stop();
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('End Session?'),
-        content: const Text('Are you sure you want to exit? Your progress will not be saved.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Resume'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Exit'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      if (mounted) context.pop();
-    } else {
-      if (!_isPaused && mounted) _pauseOrResume(); // Resume if wasn't deliberately paused
+      if (_phases[_phaseIndex] == 'Inhale') {
+        _animController.forward();
+      } else if (_phases[_phaseIndex] == 'Exhale') {
+        _animController.reverse();
+      }
     }
   }
 
   void _finish() {
-    if (mounted) {
-      context.replace('/intervention/${widget.intervention.id}/complete', extra: _startedAt);
-    }
+    _countdownTimer?.cancel();
+    _animController.dispose();
+    context.replace(
+      '/intervention/${widget.intervention.id}/complete',
+      extra: _startedAt,
+    );
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _countdownTimer?.cancel();
     _animController.dispose();
     super.dispose();
   }
@@ -126,87 +125,126 @@ class _BreathingRunnerState extends State<BreathingRunner> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final phaseName = _phases[_phaseIndex];
-    final isExpanded = phaseName == 'Inhale';
-    final isShrinking = phaseName == 'Exhale';
+    final currentPhaseName = _phases[_phaseIndex];
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        await _handleExit();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.intervention.title),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: _handleExit,
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
         ),
-        body: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Cycle ${_currentCycle + 1} of $_totalCycles',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 48),
-              Expanded(
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: _animController,
-                    builder: (context, child) {
-                      double scale = 1.0;
-                      if (isExpanded) {
-                        scale = 1.0 + (_animController.value * 0.5);
-                      } else if (isShrinking) {
-                        scale = 1.5 - (_animController.value * 0.5);
-                      } else {
-                        scale = phaseName == 'Hold' && _phaseIndex == 1 ? 1.5 : 1.0;
-                      }
+        title: Text(widget.intervention.title),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const Spacer(flex: 1),
 
-                      return Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          width: 200,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.colorScheme.primaryContainer.withAlpha(150),
-                            border: Border.all(
-                              color: theme.colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            phaseName,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: theme.colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
-                            ),
+            // Central Pacing Double Circle
+            Center(
+              child: AnimatedBuilder(
+                animation: _scaleAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightAccentSoft.withAlpha(120),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 190,
+                    height: 190,
+                    decoration: const BoxDecoration(
+                      color: AppColors.lightAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          currentPhaseName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
+                        const SizedBox(height: 4),
+                        Text(
+                          '$_secondsLeftInPhase',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: IconButton(
-                  iconSize: 64,
-                  icon: Icon(_isPaused ? Icons.play_circle_fill : Icons.pause_circle_filled),
-                  color: theme.colorScheme.primary,
-                  onPressed: _pauseOrResume,
-                ),
+            ),
+            const SizedBox(height: 36),
+
+            // Subtitle indicator
+            Text(
+              'Cycle $_currentCycle of $_totalCycles · 1:12 left',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
               ),
-            ],
-          ),
+            ),
+
+            const Spacer(flex: 2),
+
+            // Bottom action buttons (Pause & Finish)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _togglePause,
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: AppColors.lightBorder, width: 1.5),
+                        foregroundColor: AppColors.lightTextPrimary,
+                      ),
+                      child: Text(
+                        _isPaused ? 'Resume' : 'Pause',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _finish,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.lightBrand,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Finish',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
