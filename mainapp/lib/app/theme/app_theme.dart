@@ -6,16 +6,19 @@ import 'app_spacing.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
-    final textTheme = AppTypography.createTextTheme(AppColors.lightTextPrimary, AppColors.lightTextSecondary);
+    final textTheme = AppTypography.createTextTheme(
+      AppColors.lightTextPrimary,
+      AppColors.lightTextSecondary,
+    );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: AppColors.lightBrand,
         onPrimary: Colors.white,
-        secondary: AppColors.lightCalm,
+        secondary: AppColors.lightAccent,
         onSecondary: Colors.white,
-        tertiary: AppColors.lightWarm,
+        tertiary: AppColors.lightCalm,
         onTertiary: Colors.white,
         error: AppColors.lightRose,
         onError: Colors.white,
@@ -30,15 +33,23 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.lightCard,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumRadius),
-        margin: const EdgeInsets.all(AppSpacing.sm),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.cardRadius,
+          side: const BorderSide(color: AppColors.lightBorder, width: 1.2),
+        ),
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.lightPage,
         foregroundColor: AppColors.lightTextPrimary,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -46,17 +57,27 @@ class AppTheme {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          textStyle: textTheme.labelLarge,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.lightBrand,
-          side: const BorderSide(color: AppColors.lightBorder),
+          side: const BorderSide(color: AppColors.lightBorder, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          textStyle: textTheme.labelLarge,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       dividerTheme: const DividerThemeData(
@@ -68,16 +89,19 @@ class AppTheme {
   }
 
   static ThemeData get darkTheme {
-    final textTheme = AppTypography.createTextTheme(AppColors.darkTextPrimary, AppColors.darkTextSecondary);
+    final textTheme = AppTypography.createTextTheme(
+      AppColors.darkTextPrimary,
+      AppColors.darkTextSecondary,
+    );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: AppColors.darkBrand,
         onPrimary: Colors.black,
-        secondary: AppColors.darkCalm,
+        secondary: AppColors.darkAccent,
         onSecondary: Colors.black,
-        tertiary: AppColors.darkWarm,
+        tertiary: AppColors.darkCalm,
         onTertiary: Colors.black,
         error: AppColors.darkRose,
         onError: Colors.black,
@@ -92,15 +116,23 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.darkCard,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumRadius),
-        margin: const EdgeInsets.all(AppSpacing.sm),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.cardRadius,
+          side: const BorderSide(color: AppColors.darkBorder, width: 1),
+        ),
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.darkPage,
         foregroundColor: AppColors.darkTextPrimary,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -108,17 +140,27 @@ class AppTheme {
           foregroundColor: Colors.black,
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          textStyle: textTheme.labelLarge,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.darkBrand,
-          side: const BorderSide(color: AppColors.darkBorder),
+          side: const BorderSide(color: AppColors.darkBorder, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-          textStyle: textTheme.labelLarge,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       dividerTheme: const DividerThemeData(
