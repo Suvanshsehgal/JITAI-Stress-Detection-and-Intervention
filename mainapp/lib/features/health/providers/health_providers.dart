@@ -10,8 +10,14 @@ import '../repositories/health_data_repository.dart';
 import '../repositories/health_preferences_repository.dart';
 import '../services/health_permission_service.dart';
 import '../services/notification_service.dart';
+import '../services/watch_service.dart';
+import '../models/heart_rate_sample.dart';
 
 // --- Services & Repositories Providers ---
+
+final watchServiceProvider = ChangeNotifierProvider<WatchService>((ref) {
+  return WatchService();
+});
 
 final healthPreferencesRepositoryProvider =
     Provider<HealthPreferencesRepository>((ref) {
@@ -27,10 +33,24 @@ final healthPermissionServiceProvider =
 final healthDataRepositoryProvider = Provider<HealthDataRepository>((ref) {
   final prefs = ref.watch(healthPreferencesRepositoryProvider);
   final permissions = ref.watch(healthPermissionServiceProvider);
-  return MockHealthDataRepository(
+  final watch = ref.watch(watchServiceProvider);
+
+  final repo = MockHealthDataRepository(
     preferences: prefs,
     permissions: permissions,
   );
+
+  if (watch.current != null) {
+    repo.setDemoHeartRate(
+      HeartRateSample(
+        bpm: watch.current!.bpm.toDouble(),
+        timestamp: watch.current!.time,
+        quality: DataQualityStatus.available,
+      ),
+    );
+  }
+
+  return repo;
 });
 
 final calendarContextRepositoryProvider =
@@ -154,6 +174,7 @@ final healthOverviewProvider =
 final contextSnapshotProvider = FutureProvider<ContextSnapshot>((ref) async {
   // Watch dependencies so snapshot updates reactively
   ref.watch(healthPreferencesProvider);
+  ref.watch(watchServiceProvider);
   final moods = ref.watch(moodProvider);
   final sessions = ref.watch(sessionHistoryProvider);
 
