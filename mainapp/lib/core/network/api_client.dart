@@ -22,7 +22,8 @@ class UnauthorizedException extends ApiException {
 }
 
 class ApiClient {
-  final String baseUrl;
+  String baseUrl;
+  final List<String> _candidateUrls;
   final http.Client _client;
   String? _authToken;
   final Duration timeoutDuration;
@@ -30,16 +31,33 @@ class ApiClient {
   ApiClient({
     String? baseUrl,
     http.Client? client,
-    this.timeoutDuration = const Duration(seconds: 10),
+    this.timeoutDuration = const Duration(seconds: 8),
   })  : baseUrl = baseUrl ?? _defaultBaseUrl(),
+        _candidateUrls = _buildCandidateUrls(baseUrl),
         _client = client ?? http.Client();
 
-  static String _defaultBaseUrl() {
-    // 10.0.2.2 is Android emulator host loopback, localhost is desktop/web
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
+  static List<String> _buildCandidateUrls(String? customUrl) {
+    if (customUrl != null && customUrl.isNotEmpty) {
+      return [customUrl];
     }
-    return 'http://localhost:8000';
+    if (Platform.isAndroid) {
+      // 127.0.0.1:8000 works on physical Android with adb reverse
+      // 10.0.2.2:8000 works on Android Emulator host loopback
+      // localhost:8000 fallback
+      return [
+        'http://127.0.0.1:8000',
+        'http://10.0.2.2:8000',
+        'http://localhost:8000',
+      ];
+    }
+    return [
+      'http://127.0.0.1:8000',
+      'http://localhost:8000',
+    ];
+  }
+
+  static String _defaultBaseUrl() {
+    return _buildCandidateUrls(null).first;
   }
 
   void setAuthToken(String? token) {
@@ -60,34 +78,59 @@ class ApiClient {
   }
 
   Future<dynamic> get(String endpoint) async {
-    final uri = Uri.parse('$baseUrl$endpoint');
-    try {
-      final response = await _client.get(uri, headers: _headers()).timeout(timeoutDuration);
-      return _handleResponse(response);
-    } on SocketException catch (_) {
-      throw NetworkException('Unable to reach backend server. Please check your connection.');
-    } on TimeoutException catch (_) {
-      throw NetworkException('Request timed out while contacting server.');
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw NetworkException('Network error: $e');
+    // Try current baseUrl, if it fails try alternate candidates
+    final urlsToTry = [baseUrl, ..._candidateUrls.where((u) => u != baseUrl)];
+    
+    for (int i = 0; i < urlsToTry.length; i++) {
+      final currentCandidate = urlsToTry[i];
+      final uri = Uri.parse('$currentCandidate$endpoint');
+      try {
+        final response = await _client.get(uri, headers: _headers()).timeout(timeoutDuration);
+        baseUrl = currentCandidate; // Lock into working candidate
+        return _handleResponse(response);
+      } on SocketException catch (_) {
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Unable to reach backend server. Please verify backend is running on port 8000.');
+        }
+      } on TimeoutException catch (_) {
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Request timed out while contacting server.');
+        }
+      } catch (e) {
+        if (e is ApiException) rethrow;
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Network error: $e');
+        }
+      }
     }
   }
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    final uri = Uri.parse('$baseUrl$endpoint');
-    try {
-      final response = await _client
-          .post(uri, headers: _headers(), body: jsonEncode(body))
-          .timeout(timeoutDuration);
-      return _handleResponse(response);
-    } on SocketException catch (_) {
-      throw NetworkException('Unable to reach backend server. Please check your connection.');
-    } on TimeoutException catch (_) {
-      throw NetworkException('Request timed out while contacting server.');
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw NetworkException('Network error: $e');
+    final urlsToTry = [baseUrl, ..._candidateUrls.where((u) => u != baseUrl)];
+
+    for (int i = 0; i < urlsToTry.length; i++) {
+      final currentCandidate = urlsToTry[i];
+      final uri = Uri.parse('$currentCandidate$endpoint');
+      try {
+        final response = await _client
+            .post(uri, headers: _headers(), body: jsonEncode(body))
+            .timeout(timeoutDuration);
+        baseUrl = currentCandidate; // Lock into working candidate
+        return _handleResponse(response);
+      } on SocketException catch (_) {
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Unable to reach backend server. Please verify backend is running on port 8000.');
+        }
+      } on TimeoutException catch (_) {
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Request timed out while contacting server.');
+        }
+      } catch (e) {
+        if (e is ApiException) rethrow;
+        if (i == urlsToTry.length - 1) {
+          throw NetworkException('Network error: $e');
+        }
+      }
     }
   }
 
