@@ -1,26 +1,45 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/auth/auth_provider.dart';
+import '../../jitai/providers/jitai_providers.dart';
+import '../../onboarding/models/onboarding_state.dart';
+import '../../onboarding/providers/onboarding_provider.dart';
 import '../models/buddy_state.dart';
 import '../models/message.dart';
+import '../services/conversation_service.dart';
 import '../services/mock_conversation_service.dart';
-import '../../onboarding/providers/onboarding_provider.dart';
+import '../services/remote_conversation_service.dart';
 
 final mockConversationServiceProvider = Provider<MockConversationService>((ref) {
   return MockConversationService();
 });
 
+final remoteConversationServiceProvider = Provider<RemoteConversationService>((ref) {
+  final client = ref.watch(apiClientProvider);
+  final mock = ref.watch(mockConversationServiceProvider);
+  return RemoteConversationService(apiClient: client, mockFallback: mock);
+});
+
+final conversationServiceProvider = Provider<ConversationService>((ref) {
+  final useRemote = ref.watch(useRemoteBackendProvider);
+  if (useRemote) {
+    return ref.watch(remoteConversationServiceProvider);
+  }
+  return ref.watch(mockConversationServiceProvider);
+});
+
 final buddyProvider = StateNotifierProvider.autoDispose<BuddyNotifier, BuddyState>((ref) {
-  final service = ref.read(mockConversationServiceProvider);
-  final buddyName = ref.read(onboardingProvider).buddyName;
-  final tone = ref.read(onboardingProvider).tone;
+  final service = ref.watch(conversationServiceProvider);
+  final buddyName = ref.watch(onboardingProvider).buddyName;
+  final tone = ref.watch(onboardingProvider).tone;
   return BuddyNotifier(service, buddyName, tone);
 });
 
 class BuddyNotifier extends StateNotifier<BuddyState> {
-  final MockConversationService _service;
+  final ConversationService _service;
   final String _buddyName;
-  final dynamic _tone;
+  final BuddyTone _tone;
   final _uuid = const Uuid();
 
   BuddyNotifier(this._service, this._buddyName, this._tone) : super(const BuddyState()) {
@@ -56,6 +75,8 @@ class BuddyNotifier extends StateNotifier<BuddyState> {
       final responseText = await _service.getResponse(
         userMessage: text,
         tone: _tone,
+        buddyName: _buddyName,
+        history: state.messages,
       );
 
       final ebbMessage = Message(
@@ -114,6 +135,8 @@ class BuddyNotifier extends StateNotifier<BuddyState> {
       final responseText = await _service.getResponse(
         userMessage: text,
         tone: _tone,
+        buddyName: _buddyName,
+        history: state.messages,
       );
 
       final ebbMessage = Message(

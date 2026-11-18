@@ -3,7 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:mainapp/core/network/api_client.dart';
+import 'package:mainapp/features/buddy/services/remote_conversation_service.dart';
 import 'package:mainapp/features/buddy/buddy_screen.dart';
+import 'package:mainapp/features/buddy/models/message.dart';
 import 'package:mainapp/features/buddy/providers/buddy_provider.dart';
 import 'package:mainapp/features/buddy/services/mock_conversation_service.dart';
 import 'package:mainapp/core/providers/shared_prefs_provider.dart';
@@ -14,6 +20,9 @@ class FastMockConversationService extends MockConversationService {
   Future<String> getResponse({
     required String userMessage,
     required BuddyTone tone,
+    String? buddyName,
+    List<Message>? history,
+    Map<String, dynamic>? contextData,
   }) async {
     // Return immediately for tests instead of 1500ms delay
     if (userMessage.trim().toLowerCase() == 'error') {
@@ -138,5 +147,58 @@ void main() {
     expect(find.text('Hello'), findsNothing);
     // Welcome message remains
     expect(find.text("Hi! I'm Pip Test. How are you feeling today?"), findsOneWidget);
+  });
+
+  group('RemoteConversationService', () {
+    test('sends request and parses response successfully', () async {
+      final mockHttpClient = MockClient((request) async {
+        expect(request.url.path, '/api/v1/buddy/chat');
+        final body = jsonDecode(request.body);
+        expect(body['message'], 'Feeling anxious');
+        expect(body['buddy_name'], 'Pip');
+        expect(body['tone'], 'gentle');
+        return http.Response(
+          jsonEncode({
+            'response': 'I am here with you. Take a slow breath.',
+            'buddy_name': 'Pip',
+            'tone': 'gentle',
+            'model_used': 'gemini-1.5-flash',
+          }),
+          200,
+        );
+      });
+
+      final apiClient = ApiClient(baseUrl: 'http://localhost:8000', client: mockHttpClient);
+      final remoteService = RemoteConversationService(apiClient: apiClient);
+
+      final reply = await remoteService.getResponse(
+        userMessage: 'Feeling anxious',
+        tone: BuddyTone.gentle,
+        buddyName: 'Pip',
+      );
+
+      expect(reply, 'I am here with you. Take a slow breath.');
+    });
+
+    test('falls back to mock service on network failure', () async {
+      final mockHttpClient = MockClient((request) async {
+        return http.Response('Server error', 500);
+      });
+
+      final apiClient = ApiClient(baseUrl: 'http://localhost:8000', client: mockHttpClient);
+      final fastMock = FastMockConversationService();
+      final remoteService = RemoteConversationService(
+        apiClient: apiClient,
+        mockFallback: fastMock,
+      );
+
+      final reply = await remoteService.getResponse(
+        userMessage: 'I am stressed',
+        tone: BuddyTone.gentle,
+        buddyName: 'Pip',
+      );
+
+      expect(reply, contains('Stress can feel overwhelming'));
+    });
   });
 }

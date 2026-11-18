@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/buddy_provider.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_radius.dart';
 
 class MessageComposer extends ConsumerStatefulWidget {
   const MessageComposer({super.key});
@@ -20,9 +22,7 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     _controller.addListener(() {
       final hasText = _controller.text.trim().isNotEmpty;
       if (hasText != _hasText) {
-        setState(() {
-          _hasText = hasText;
-        });
+        setState(() => _hasText = hasText);
       }
     });
   }
@@ -45,57 +45,49 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isTyping = ref.watch(buddyProvider).isTyping;
 
     return Container(
-      padding: EdgeInsets.only(
-        left: 16.0,
-        right: 16.0,
-        top: 12.0,
-        bottom: 12.0 + MediaQuery.of(context).padding.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      color: Colors.transparent,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18.0),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(24.0),
+                color: Colors.white,
+                borderRadius: AppRadius.pill,
+                border: Border.all(color: AppColors.lightBorder, width: 1.2),
               ),
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                enabled: !isTyping,
-                minLines: 1,
-                maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(
-                  hintText: 'Message...',
+                  hintText: 'Type a message',
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          AnimatedOpacity(
-            opacity: _hasText && !isTyping ? 1.0 : 0.5,
-            duration: const Duration(milliseconds: 200),
-            child: IconButton(
-              onPressed: _hasText && !isTyping ? _submit : null,
-              icon: const Icon(Icons.send),
-              color: theme.colorScheme.primary,
-              tooltip: 'Send message',
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _hasText && !isTyping ? _submit : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _hasText && !isTyping ? AppColors.lightAccent : AppColors.lightBorder,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.near_me_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
         ],

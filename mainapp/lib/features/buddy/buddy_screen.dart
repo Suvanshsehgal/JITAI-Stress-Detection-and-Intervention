@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'providers/buddy_provider.dart';
 import 'widgets/message_bubble.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/quick_actions.dart';
-import '../onboarding/providers/onboarding_provider.dart';
+import '../../app/theme/app_colors.dart';
 
 class BuddyScreen extends ConsumerStatefulWidget {
   const BuddyScreen({super.key});
@@ -35,26 +34,52 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final buddyState = ref.watch(buddyProvider);
-    final buddyName = ref.watch(onboardingProvider).buddyName;
 
     // Listen for new messages to auto-scroll
     ref.listen(buddyProvider.select((state) => state.messages.length), (previous, next) {
       if (previous != null && next > previous) {
-        // Wait a frame for list to build
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBottom();
-        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
     });
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(buddyName),
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                color: AppColors.mascotPurple,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.spa_rounded, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Stillpoint',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                Text(
+                  'Here to listen',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.lightCalm,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             tooltip: 'New Conversation',
             onPressed: () {
               ref.read(buddyProvider.notifier).startNewConversation();
@@ -75,24 +100,30 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> {
                     final message = buddyState.messages[index];
                     return MessageBubble(message: message);
                   } else {
-                    // Typing indicator
-                    return Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4.0),
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: theme.colorScheme.outlineVariant),
-                        ),
-                        child: Text(
-                          '$buddyName is typing...',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: AppColors.mascotPurple,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.spa_rounded, color: Colors.white, size: 14),
                           ),
-                        ),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.lightBorder),
+                            ),
+                            child: const Text('Stillpoint is typing...', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -101,6 +132,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> {
             ),
             const QuickActionsWidget(),
             const MessageComposer(),
+            const SizedBox(height: 70), // Floating nav bar clearance
           ],
         ),
       ),

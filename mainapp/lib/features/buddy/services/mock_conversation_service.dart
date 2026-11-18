@@ -1,10 +1,16 @@
 import 'dart:async';
 import '../../onboarding/models/onboarding_state.dart';
+import '../models/message.dart';
+import 'conversation_service.dart';
 
-class MockConversationService {
+class MockConversationService implements ConversationService {
+  @override
   Future<String> getResponse({
     required String userMessage,
     required BuddyTone tone,
+    String? buddyName,
+    List<Message>? history,
+    Map<String, dynamic>? contextData,
   }) async {
     // Artificial delay to simulate network/typing
     await Future.delayed(const Duration(milliseconds: 1500));
