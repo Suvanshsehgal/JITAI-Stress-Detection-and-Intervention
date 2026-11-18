@@ -1,3 +1,13 @@
-
 # Local secrets: API keys
 backend/.env
+
+# Logs and cache
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local diagnostic files
+backend/test_gemini_keys.py
+backend/test_single.py
+connect_app.zip
