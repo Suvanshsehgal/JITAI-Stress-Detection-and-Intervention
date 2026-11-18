@@ -91,3 +91,23 @@ class InterventionResponseSyncResponse(BaseModel):
     syncedCount: int
     failedCount: int
     message: str
+
+# ─── Chat & Buddy Schemas ─────────────────────────────────────────────────────
+
+class ChatMessageItem(BaseModel):
+    role: str  # "user", "assistant", "model"
+    content: str
+
+class BuddyChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    buddy_name: Optional[str] = "Pip"
+    tone: Optional[str] = "gentle"  # "gentle", "playful", "straightTalking"
+    history: List[ChatMessageItem] = Field(default_factory=list)
+    context: Optional[Dict[str, Any]] = None  # optional stress assessment, heart rate, mood
+
+class BuddyChatResponse(BaseModel):
+    response: str
+    buddy_name: str
+    tone: str
+    model_used: str  # "gemini-1.5-flash" or "fallback-rules"
+

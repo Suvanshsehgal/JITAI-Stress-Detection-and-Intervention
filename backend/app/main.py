@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.config import settings
-from app.api.v1 import auth, stress, jitai, sync
+from app.api.v1 import auth, stress, jitai, sync, buddy
 from app.core.logging import logger
 
 app = FastAPI(
@@ -45,3 +45,4 @@ app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(stress.router, prefix=settings.API_V1_STR)
 app.include_router(jitai.router, prefix=settings.API_V1_STR)
 app.include_router(sync.router, prefix=settings.API_V1_STR)
+app.include_router(buddy.router, prefix=settings.API_V1_STR)
